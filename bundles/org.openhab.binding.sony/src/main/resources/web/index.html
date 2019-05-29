@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+<meta charset="UTF-8">
+<title>Sony</title>
+<script src="js/thirdparty/jquery.min.js"></script>
+<script src="js/thirdparty/angular.min.js"></script>
+<script src="js/thirdparty/angular-sanitize.js"></script>
+<script src="js/thirdparty/bootstrap.min.js"></script>
+<script src="js/thirdparty/ui-bootstrap-tpls.min.js"></script>
+<script src="js/thirdparty/jquery.jgrowl.min.js"></script>
+<script src="js/thirdparty/lodash.min.js"></script>
+<script src="js/thirdparty/select.min.js"></script>
+<script src="js/thirdparty/filesaver.js"></script>
+<script src="js/app.js"></script>
+
+<link rel="stylesheet" href="css/thirdparty/all.min.css">
+<link rel="stylesheet" href="css/thirdparty/bootstrap.min.css">
+<link rel="stylesheet" href="css/thirdparty/bootstrap-theme.min.css">
+<link rel="stylesheet" href="css/thirdparty/jquery.jgrowl.min.css" />
+<link rel="stylesheet" href="css/thirdparty/select.min.css">
+<link rel="stylesheet" href="css/thirdparty/select2.css">
+<link rel="stylesheet" href="css/site.css">
+</head>
+
+<body>
+	<div id="sonyApp" ng-app="sony" ng-controller="SonyCtrl as ctrl" class="">
+		<div id='leftside'>
+			<div>
+				<label for="baseUrl">Base URL:</label>
+				<input type="text" id="baseUrl" ng-model="ctrl.baseUrl">
+			</div>
+			<div>
+				<label for="transport">Transport:</label>
+				<select id="transport" ng-model="ctrl.transport">
+                    <option value="auto">Auto</option>
+					<option value="websocket:jsonizer">Websocket</option>
+					<option value="xhrpost:jsonizer">HTTP</option>
+				</select>
+			</div>
+			<div>
+				<label for="service">Service:</label>
+				<input type="text" id="service" ng-model="ctrl.service">
+			</div>
+			<div>
+				<label for="command">Command:</label>
+				<input type="text" id="command" ng-model="ctrl.command">
+			</div>
+			<div>
+				<label for="version">Version:</label>
+				<input type="text" id="version" ng-model="ctrl.version">
+			</div>
+			<div>
+				<label for="parms">Parms:</label>
+				<input type="text" id="parms" ng-model="ctrl.parms">
+			</div>
+			<div>
+				<button id="execute" uib-tooltip="Run Command" ng-click="ctrl.runCommand()" ng-class="">Execute</button>
+			</div>
+		</div>
+		<div id='rightsise'>
+		      <div>
+		          <label for="loadFile" class="btn">Load File</label>
+                     <input id="loadFile"
+                                onchange="angular.element(this).scope().ctrl.loadFile(this)"
+                                type="file" accept=".json" />
+                  <label for="mergeFile" class="btn">Merge File</label>
+                     <input id="mergeFile"
+                                onchange="angular.element(this).scope().ctrl.mergeFile(this)"
+                                type="file" accept=".json" />
+                    <span ng-bind="ctrl.loadedFile"/>
+		      </div>
+		      <div id="methods">
+		          <table>
+		              <tbody>
+		                  <tr ng-repeat="mthd in ctrl.methods track by $index" ng-class-even="'even'" 
+		                  ng-class="{ 'selected': ctrl.selectedIdx == $index,'diff': $index>0 && ctrl.methods[$index].serviceName == ctrl.methods[$index-1].serviceName && ctrl.methods[$index].method.methodName == ctrl.methods[$index-1].method.methodName && ctrl.methods[$index].method.version == ctrl.methods[$index-1].method.version }"
+		                  ng-click="ctrl.selectMethod($index)">
+		                      <td>{{ mthd.serviceName }}</td>
+		                      <td>{{ mthd.method.methodName }}</td>
+		                      <td>{{ mthd.method.version }}</td>
+		                      <td>{{ mthd.method.parms.join() }}</td>
+		                      <td>{{ mthd.method.retVals.join() }}</td>
+                              <td>{{ mthd.methodType}}</td>
+                              <td>{{ mthd.modelName }}</td>
+		                  </tr>
+		              </tbody>
+		          </table>
+		          <!-- <div ng-repeat="mthd in ctrl.methods track by $index" ng-click="ctrl.selectMethod($index)"><span >{{ mthd.serviceName}} {{ mthd.method.methodName }} [{{ mthd.method.version }}] ({{mthd.method.parms.join()}}) = {{mthd.method.retVals.join()}}</span></div> -->
+		      </div>
+		</div>
+		<div>
+			<label id="resultsLabel" for="results">Results:</label>
+			<textarea id="results" ng-model="ctrl.results" readonly></textarea>
+		</div>
+	</div>
+</body>
+</html>

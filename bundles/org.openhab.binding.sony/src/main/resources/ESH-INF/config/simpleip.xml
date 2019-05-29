@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<config-description:config-descriptions
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns:config-description="http://eclipse.org/smarthome/schemas/config-description/v1.0.0"
+	xsi:schemaLocation="http://eclipse.org/smarthome/schemas/config-description/v1.0.0 http://eclipse.org/smarthome/schemas/config-description-1.0.0.xsd">
+
+	<config-description uri="thing-type:sony:simpleipconfig">
+		<parameter name="deviceAddress" type="text" required="true">
+			<context>network-address</context>
+			<label>IP or Host Name</label>
+			<description>The IP or host name of the simple ip access point</description>
+		</parameter>
+		<parameter name="deviceMacAddress" type="text" required="false">
+			<context>network-address</context>
+			<label>Device MAC Address</label>
+			<description>The MAC address of the device</description>
+		</parameter>
+		<parameter name="commandsMapFile" type="text" required="true">
+			<context>mappings</context>
+			<label>Commands Map File</label>
+			<description>The Commands Map File</description>
+			<advanced>true</advanced>
+		</parameter>
+		<parameter name="netInterface" type="text">
+			<context>setup</context>
+			<label>Interface</label>
+			<description>The interface being used (eth0 for wired, wlan1 for wireless)</description>
+			<default>eth0</default>
+			<advanced>true</advanced>
+		</parameter>
+		<parameter name="refresh" type="integer" required="false">
+			<context>polling</context>
+			<label>Refresh Interval</label>
+			<description>The interval, in seconds, to refresh the device state (-1 to disable)</description>
+			<default>30</default>
+			<advanced>true</advanced>
+		</parameter>
+		<parameter name="retryPolling" type="integer" required="false">
+			<context>polling</context>
+			<label>Retry Polling</label>
+			<description>The time, in seconds, to retry a connection attempt (-1 to disable)</description>
+			<default>10</default>
+			<advanced>true</advanced>
+		</parameter>
+		<parameter name="checkStatusPolling" type="integer" required="false">
+			<context>polling</context>
+			<label>Status Check Interval</label>
+			<description>The time, in seconds, to check the device status (-1 to disable)</description>
+			<default>30</default>
+			<advanced>true</advanced>
+		</parameter>
+	</config-description>
+</config-description:config-descriptions>

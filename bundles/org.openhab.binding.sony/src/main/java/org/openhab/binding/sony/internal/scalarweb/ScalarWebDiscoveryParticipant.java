@@ -1,0 +1,224 @@
+/**
+ * Copyright (c) 2010-2019 Contributors to the openHAB project
+ *
+ * See the NOTICE file(s) distributed with this work for additional
+ * information.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * http://www.eclipse.org/legal/epl-2.0
+ *
+ * SPDX-License-Identifier: EPL-2.0
+ */
+package org.openhab.binding.sony.internal.scalarweb;
+
+import java.net.URL;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Objects;
+
+import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang.Validate;
+import org.eclipse.jdt.annotation.NonNullByDefault;
+import org.eclipse.jdt.annotation.Nullable;
+import org.eclipse.smarthome.config.discovery.DiscoveryResult;
+import org.eclipse.smarthome.config.discovery.DiscoveryResultBuilder;
+import org.eclipse.smarthome.config.discovery.upnp.UpnpDiscoveryParticipant;
+import org.eclipse.smarthome.core.thing.ThingTypeUID;
+import org.eclipse.smarthome.core.thing.ThingUID;
+import org.jupnp.model.meta.RemoteDevice;
+import org.jupnp.model.meta.RemoteDeviceIdentity;
+import org.jupnp.model.meta.RemoteService;
+import org.jupnp.model.types.ServiceId;
+import org.jupnp.model.types.UDN;
+import org.openhab.binding.sony.internal.AbstractDiscoveryParticipant;
+import org.openhab.binding.sony.internal.SonyBindingConstants;
+import org.openhab.binding.sony.internal.UidUtils;
+import org.openhab.binding.sony.internal.providers.SonyDefinitionProvider;
+import org.osgi.service.component.annotations.Component;
+import org.osgi.service.component.annotations.Reference;
+
+/**
+ * This implementation of the {@link UpnpDiscoveryParticipant} provides discovery of Sony SCALAR protocol devices.
+ *
+ * @author Tim Roberts - Initial contribution
+ */
+@NonNullByDefault
+@Component(immediate = true)
+public class ScalarWebDiscoveryParticipant extends AbstractDiscoveryParticipant implements UpnpDiscoveryParticipant {
+    private static final Map<ThingUID, @Nullable String> scalarToIrcc = new HashMap<>();
+
+    /**
+     * Constructs the participant
+     */
+    public ScalarWebDiscoveryParticipant() {
+        super(SonyBindingConstants.SCALAR_THING_TYPE_PREFIX);
+    }
+
+    @Override
+    public @Nullable DiscoveryResult createResult(RemoteDevice device) {
+        Objects.requireNonNull(device, "device cannot be null");
+
+        /**
+         * We need to handle a bunch of situations
+         * 1. Scalar service with no IRCC at all
+         * 2. IRCC service with no Scalar service
+         * 3. SCALAR and IRCC service together
+         * 4. SCALAR separate from the IRCC service
+         * 4a. where the IRCC service comes in BEFORE the scalar service
+         * 4b. where the IRCC service comes in AFTER the scalar service
+         * 5. Both 3 and 4 (it advertises both together and separate)
+         *
+         * Since the configuration contains an IRCC URL, we need to handle an IRCC service being advertised separately
+         * (and can come in before or after the scalar notification)
+         *
+         * In case of #3, we prefer the URL from the scalar one (and will ignore the IRCC one)
+         *
+         * If we receive an IRCC service with no scalar service (maybe #2, #4 or #5 scenarios)
+         * -- Check to see if we have a prior scalar result (#4b or #5)
+         * -- -- If we have a prior result and no URL - add our URL and create a new result with the IRCC url (#4b)
+         * -- -- If we have a prior result and a URL - ignore the IRCC service (#5)
+         * -- -- If no scalar service - save our URL for future results but do NOT create a result (#2, #4a or #5)
+         *
+         * -- If it's a SCALAR service (#1, #3, #4a, #5)
+         * -- -- If we have no IRCC service and no saved IRCC url - create an entry (#1/#4b/#5)
+         * -- -- If we have no IRCC service and a null saved IRCC url - use null (#1/#4b/#5)
+         * -- -- If we have no IRCC service and a non-null saved IRCC url - use the url (#4a/#5)
+         * -- -- If we have a IRCC service, use scalar URL as IRCC and save it (#3/#5)
+         * -- -- Create a result
+         */
+        if (!isSonyDevice(device)) {
+            return null;
+        }
+
+        final String modelName = getModelName(device);
+        if (modelName == null || StringUtils.isEmpty(modelName)) {
+            logger.debug("Found Sony device but it has no model name - ignoring");
+            return null;
+        }
+
+        final RemoteDeviceIdentity identity = device.getIdentity();
+
+        final RemoteService irccService = device.findService(
+                new ServiceId(SonyBindingConstants.SONY_SERVICESCHEMA, SonyBindingConstants.SONY_IRCCSERVICENAME));
+        final RemoteService scalarWebService = device.findService(
+                new ServiceId(SonyBindingConstants.SONY_SERVICESCHEMA, SonyBindingConstants.SONY_SCALARWEBSERVICENAME));
+
+        if (irccService != null && scalarWebService == null) {
+            final ThingUID thingUID = getThingUID(device, modelName);
+            final String irccUrl = identity.getDescriptorURL().toString();
+
+            if (scalarToIrcc.containsKey(thingUID)) {
+                final String oldIrccUrl = scalarToIrcc.get(thingUID);
+                if (oldIrccUrl == null) {
+                    scalarToIrcc.put(thingUID, irccUrl);
+                    return createResult(device, thingUID, irccUrl);
+                }
+            } else {
+                scalarToIrcc.put(thingUID, irccUrl);
+            }
+            return null;
+        }
+
+        final ThingUID uid = getThingUID(device);
+        if (uid == null) {
+            return null;
+        }
+
+        String irccUrl = null;
+        if (irccService == null) {
+            if (scalarToIrcc.containsKey(uid)) {
+                irccUrl = scalarToIrcc.get(uid);
+            } else {
+                scalarToIrcc.put(uid, null);
+            }
+        } else {
+            irccUrl = identity.getDescriptorURL().toString();
+            scalarToIrcc.put(uid, irccUrl);
+        }
+
+        return createResult(device, uid, irccUrl);
+    }
+
+    @Override
+    public @Nullable ThingUID getThingUID(RemoteDevice device) {
+        Objects.requireNonNull(device, "device cannot be null");
+
+        if (isSonyDevice(device)) {
+            final String modelName = getModelName(device);
+            if (modelName == null || StringUtils.isEmpty(modelName)) {
+                logger.debug("Found Sony device but it has no model name - ignoring");
+                return null;
+            }
+
+            final RemoteService scalarWebService = device.findService(new ServiceId(
+                    SonyBindingConstants.SONY_SERVICESCHEMA, SonyBindingConstants.SONY_SCALARWEBSERVICENAME));
+            if (scalarWebService != null) {
+                final RemoteDeviceIdentity identity = device.getIdentity();
+                if (identity != null) {
+                    final UDN udn = device.getIdentity().getUdn();
+                    logger.debug("Found Sony WebScalarAPI service: {}", udn);
+                    final ThingTypeUID modelUID = getThingTypeUID(modelName);
+                    return UidUtils.createThingUID(modelUID == null ? ScalarWebConstants.THING_TYPE_SCALAR : modelUID,
+                            udn);
+                } else {
+                    logger.debug("Found Sony WebScalarAPI service but it had no identity!");
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Helper method to create a result from the device, uid and possibly irccurl
+     *
+     * @param device  a non-null device
+     * @param uid     a non-null thing uid
+     * @param irccUrl a possibly null, possibly empty irccurl
+     * @return a non-null result
+     */
+    private static DiscoveryResult createResult(RemoteDevice device, ThingUID uid, @Nullable String irccUrl) {
+        Objects.requireNonNull(device, "device cannot be null");
+        Objects.requireNonNull(uid, "uid cannot be null");
+
+        final RemoteDeviceIdentity identity = device.getIdentity();
+        final URL scalarURL = identity.getDescriptorURL();
+
+        final ScalarWebConfig config = new ScalarWebConfig();
+        config.setCommandsMapFile("scalar-" + uid.getId() + ".map");
+        config.setDeviceMacAddress(getMacAddress(identity, uid));
+        config.setDeviceAddress(scalarURL.toString());
+        config.setIrccUrl(irccUrl == null ? "" : irccUrl);
+
+        final DiscoveryResult result = DiscoveryResultBuilder.create(uid).withProperties(config.asProperties())
+                .withLabel(getLabel(device)).build();
+        return result;
+    }
+
+    /**
+     * Helper method to get a thing UID from the device and model name
+     * 
+     * @param device    a non-null device
+     * @param modelName a non-null, non-empty modelname
+     * @return
+     */
+    private ThingUID getThingUID(RemoteDevice device, String modelName) {
+        Objects.requireNonNull(device, "device cannot be null");
+        Validate.notEmpty(modelName, "modelName cannot be empty");
+
+        final UDN udn = device.getIdentity().getUdn();
+        final ThingTypeUID modelUID = getThingTypeUID(modelName);
+        return UidUtils.createThingUID(modelUID == null ? ScalarWebConstants.THING_TYPE_SCALAR : modelUID, udn);
+    }
+
+    @Reference
+    public void setSonyDefinitionProvider(SonyDefinitionProvider sonyDefinitionProvider) {
+        Objects.requireNonNull(sonyDefinitionProvider, "sonyDefinitionProvider cannot be null");
+        this.sonyDefinitionProvider = sonyDefinitionProvider;
+    }
+
+    public void unsetSonyDefinitionProvider(SonyDefinitionProvider sonyDefinitionProvider) {
+        this.sonyDefinitionProvider = null;
+    }
+}
