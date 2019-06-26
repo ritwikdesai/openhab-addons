@@ -104,7 +104,7 @@ public class SonyServlet extends HttpServlet {
         try {
             localHttpService.registerServlet(SONYAPP_PATH, this, new Hashtable<>(),
                     localHttpService.createDefaultHttpContext());
-            localHttpService.registerResources(SONY_PATH, "web", localHttpService.createDefaultHttpContext());
+            localHttpService.registerResources(SONY_PATH, "web/sonyapp/dist", localHttpService.createDefaultHttpContext());
             logger.debug("Started Sony Web service at {}", SONY_PATH);
         } catch (ServletException | NamespaceException e) {
             logger.debug("Exception starting status servlet: {}", e.getMessage(), e);
@@ -175,9 +175,6 @@ public class SonyServlet extends HttpServlet {
                         + "\",\"params\":[" + parms + "]}";
 
                 try {
-                    // final ScalarWebResult result =
-                    // transport.executeRaw(cmd).get(ScalarWebConstants.RSP_WAIT_TIMEOUTSECONDS,
-                    // TimeUnit.SECONDS);
                     final ScalarWebResult result = transport.executeRaw(cmd).get();
                     if (result.isError()) {
                         SonyUtil.write(resp, gson.toJson(new CommandResponse(false, result.getDeviceErrorDesc())));
