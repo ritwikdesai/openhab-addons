@@ -38,11 +38,11 @@
 import { mapState, mapActions } from 'vuex';
 import Vue from 'vue';
 export default Vue.extend({
-  computed: { 
-    ...mapState('definition', [ 'currMethod' ])
+  computed: {
+    ...mapState('definition', [ 'currMethod' ]),
   },
   methods: {
-    ...mapActions('definition', ['runCommand'] )
+    ...mapActions('definition', ['runCommand'] ),
   },
 });
 </script>

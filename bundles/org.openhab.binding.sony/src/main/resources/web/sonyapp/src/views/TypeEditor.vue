@@ -14,7 +14,7 @@ import Mappings from '@/components/TypeEditor/Mappings.vue';
 
 @Component({
   components: {
-    Actions,Groups,Mappings
+    Actions, Groups, Mappings,
   },
 })
 export default class Definitions extends Vue {}

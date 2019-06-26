@@ -10,7 +10,7 @@ import { mapState } from 'vuex';
 import Vue from 'vue';
 export default Vue.extend({
   computed: {
-    ...mapState('definition', ['results'])
+    ...mapState('definition', ['results']),
   },
 });
 </script>

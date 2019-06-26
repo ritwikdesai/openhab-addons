@@ -35,23 +35,23 @@
 </template>
 
 <script lang="ts">
-import { mapState } from "vuex";
-import Vue from "vue";
-import TypeDefinition from "../../modules/types/TypeDefinition";
-import NameValue from "../../modules/types/NameValue";
+import { mapState } from 'vuex';
+import Vue from 'vue';
+import TypeDefinition from '../../modules/types/TypeDefinition';
+import NameValue from '../../modules/types/NameValue';
 
 export default Vue.extend({
   computed: {
-    ...mapState("type", ["typeDefinition"])
+    ...mapState('type', ['typeDefinition']),
   },
   methods: {
     addGroup(typeDefinition: TypeDefinition) {
-      typeDefinition.channelGroups.unshift(new NameValue("", ""));
+      typeDefinition.channelGroups.unshift(new NameValue('', ''));
     },
     deleteGroup(typeDefinition: TypeDefinition, group: NameValue, idx: number) {
       typeDefinition.channelGroups.splice(idx, 1);
-    }
-  }
+    },
+  },
 });
 </script>
 

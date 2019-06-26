@@ -7,20 +7,20 @@
 </template>
 
 <script lang="ts">
-import { mapState, mapActions } from "vuex";
-import FileRead from "@/components/Common/FileRead.vue";
-import Vue from "vue";
+import { mapState, mapActions } from 'vuex';
+import FileRead from '@/components/Common/FileRead.vue';
+import Vue from 'vue';
 
 export default Vue.extend({
   components: {
-    FileRead
+    FileRead,
   },
   methods: {
-    ...mapActions("type", ["saveFile"])
+    ...mapActions('type', ['saveFile']),
   },
   computed: {
-    ...mapState("type", ["fileName","typeDefinition"])
-  }
+    ...mapState('type', ['fileName', 'typeDefinition']),
+  },
 });
 </script>
 

@@ -145,18 +145,18 @@
 </template>
 
 <script lang="ts">
-import { mapState } from "vuex";
-import Vue from "vue";
+import { mapState } from 'vuex';
+import Vue from 'vue';
 
-import modal from "vue-js-modal";
-import NameValue from "../../modules/types/NameValue";
-import Channel from "../../modules/types/Channel";
+import modal from 'vue-js-modal';
+import NameValue from '../../modules/types/NameValue';
+import Channel from '../../modules/types/Channel';
 
 
 Vue.use(modal);
 
 class MyData {
-  selectedChannel?: Channel;
+  public selectedChannel?: Channel;
   constructor() {
     this.selectedChannel = undefined;
   }
@@ -165,7 +165,7 @@ class MyData {
 const myData = new MyData();
 
 export default Vue.extend({
-  data: function() {
+  data: () => {
     return myData;
   },
   methods: {
@@ -173,33 +173,33 @@ export default Vue.extend({
       this.selectedChannel = undefined;
     },
     addState(chl: Channel, state: NameValue, idx: number) {
-      chl.state.push(new NameValue("", ""));
+      chl.state.push(new NameValue('', ''));
     },
     deleteState(chl: Channel, state: NameValue, idx: number) {
       chl.state.splice(idx, 1);
     },
     addProperty(chl: Channel, state: NameValue, idx: number) {
-      chl.properties.push(new NameValue("", ""));
+      chl.properties.push(new NameValue('', ''));
     },
     deleteProperty(chl: Channel, state: NameValue, idx: number) {
       chl.properties.splice(idx, 1);
     },
     showProperties(chl: Channel) {
       this.selectedChannel = chl;
-      this.$modal.show("modal-props");
+      this.$modal.show('modal-props');
     },
     showState(chl: Channel) {
       this.selectedChannel = chl;
-      this.$modal.show("modal-state");
+      this.$modal.show('modal-state');
     },
     showInfo(chl: Channel) {
       this.selectedChannel = chl;
-      this.$modal.show("modal-info");
-    }
+      this.$modal.show('modal-info');
+    },
   },
   computed: {
-    ...mapState("type", ["typeDefinition"])
-  }
+    ...mapState('type', ['typeDefinition']),
+  },
 });
 </script>
 

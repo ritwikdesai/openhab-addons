@@ -14,8 +14,8 @@ export default Vue.extend({
   props: {
     id: String,
     icon: String,
-    title: String, 
-    callback: String
+    title: String,
+    callback: String,
   },
   methods: {
     loadFile(event: any) {
@@ -24,13 +24,13 @@ export default Vue.extend({
         const reader = new FileReader();
         const store = this.$store;
 
-        reader.onload = e => {
+        reader.onload = (e) => {
           store.commit(this.$props.callback, { file: files[0], result: reader.result});
         };
         reader.readAsText(files[0]);
       }
-    }
-  }
+    },
+  },
 });
 </script>
 

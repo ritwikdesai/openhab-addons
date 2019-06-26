@@ -30,22 +30,22 @@
 </template>
 
 <script lang="ts">
-import Vue from "vue";
-import { mapState } from "vuex";
+import Vue from 'vue';
+import { mapState } from 'vuex';
 import FileRead from '@/components/Common/FileRead.vue';
 
 export default Vue.extend({
   components: {
-    FileRead
+    FileRead,
   },
   computed: {
-    ...mapState("definition", ["file"])
+    ...mapState('definition', ['file']),
   },
   methods: {
     selectMethod(idx: number) {
-      this.$store.commit("definition/selectMethod", idx);
+      this.$store.commit('definition/selectMethod', idx);
     },
-  }
+  },
 });
 </script>
 
