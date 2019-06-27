@@ -110,7 +110,6 @@ public class ScalarWebDeviceManager implements AutoCloseable {
 
         try (final SonyTransport<ScalarWebRequest> httpTransport = transportFactory
                 .getSonyTransport(ScalarWebService.GUIDE, SonyTransport.HTTP)) {
-
             if (httpTransport == null) {
                 throw new IllegalArgumentException("Shouldn't happen - HTTP transport not found!");
             }

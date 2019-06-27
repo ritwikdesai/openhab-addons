@@ -16,24 +16,41 @@ import org.eclipse.jdt.annotation.NonNullByDefault;
 import org.eclipse.jdt.annotation.Nullable;
 
 /**
- * The video information class used for deserialization only
+ * The audio information class used for deserialization only
  * 
  * @author Tim Roberts - Initial contribution
  */
 @NonNullByDefault
 public class AudioInfo {
+    /** The audio channel  */
     private @Nullable String channel;
+
+    /** The audio codec */
     private @Nullable String codec;
+
+    /** The audio frequency */
     private @Nullable String frequency;
 
+    /**
+     * Returns the audio channel
+     * @return the audio channel
+     */
     public @Nullable String getChannel() {
         return channel;
     }
 
+    /**
+     * Returns the audio codec
+     * @return the audio codec
+     */
     public @Nullable String getCodec() {
         return codec;
     }
 
+    /**
+     * Returns the audio frequency
+     * @return the audio frequency
+     */
     public @Nullable String getFrequency() {
         return frequency;
     }

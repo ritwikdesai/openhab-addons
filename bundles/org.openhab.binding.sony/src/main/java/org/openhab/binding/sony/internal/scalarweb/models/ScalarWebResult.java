@@ -198,24 +198,6 @@ public class ScalarWebResult extends AbstractScalarResponse {
     }
 
     @Override
-    public <T> T as(Class<T> clazz, GetClass<T> getC) throws IOException {
-        if (isError()) {
-            throw getHttpResponse().createException();
-        }
-
-        return super.as(clazz, getC);
-    }
-
-    @Override
-    public <T> List<T> asArray(Class<T> clazz, GetClass<T> getC) throws IOException {
-        if (isError()) {
-            throw getHttpResponse().createException();
-        }
-
-        return super.asArray(clazz, getC);
-    }
-
-    @Override
     public <T> T as(Class<T> clazz) throws IOException {
         if (isError()) {
             throw getHttpResponse().createException();

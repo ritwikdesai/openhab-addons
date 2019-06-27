@@ -1,6 +1,6 @@
 <template>
-  <div>
-    <div class="title">
+  <div class='groups'>
+    <div class="title stuff">
       <span>Groups</span>
       <div class="actions">
         <button uib-tooltip="Add" v-on:click="addGroup(typeDefinition)">
@@ -56,6 +56,9 @@ export default Vue.extend({
 </script>
 
 <style scoped>
+.groups {
+ margin-left: 33em;
+}
 .title,
 .content {
   width: 40em;

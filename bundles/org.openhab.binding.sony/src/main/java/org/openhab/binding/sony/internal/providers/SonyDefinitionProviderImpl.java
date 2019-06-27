@@ -274,6 +274,7 @@ public class SonyDefinitionProviderImpl
         Validate.notEmpty(configUri, "configUri cannot be empty");
         Validate.notEmpty(modelName, "modelName cannot be empty");
         Objects.requireNonNull(thing, "thing cannot be null");
+        Objects.requireNonNull(channelFilter, "channelFilter cannot be null");
 
         final ThingTypeUID thingTypeUID = thing.getThingTypeUID();
         if (!StringUtils.equalsIgnoreCase(service, thingTypeUID.getId())) {

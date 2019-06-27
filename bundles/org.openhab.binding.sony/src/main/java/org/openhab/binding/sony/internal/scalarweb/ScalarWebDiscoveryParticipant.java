@@ -46,7 +46,8 @@ import org.osgi.service.component.annotations.Reference;
 @NonNullByDefault
 @Component(immediate = true)
 public class ScalarWebDiscoveryParticipant extends AbstractDiscoveryParticipant implements UpnpDiscoveryParticipant {
-    private static final Map<ThingUID, @Nullable String> scalarToIrcc = new HashMap<>();
+    // See footnotes in createResult for the purpose of this field
+    private static final Map<ThingUID, @Nullable String> SCALARTOIRCC = new HashMap<>();
 
     /**
      * Constructs the participant
@@ -108,14 +109,14 @@ public class ScalarWebDiscoveryParticipant extends AbstractDiscoveryParticipant 
             final ThingUID thingUID = getThingUID(device, modelName);
             final String irccUrl = identity.getDescriptorURL().toString();
 
-            if (scalarToIrcc.containsKey(thingUID)) {
-                final String oldIrccUrl = scalarToIrcc.get(thingUID);
+            if (SCALARTOIRCC.containsKey(thingUID)) {
+                final String oldIrccUrl = SCALARTOIRCC.get(thingUID);
                 if (oldIrccUrl == null) {
-                    scalarToIrcc.put(thingUID, irccUrl);
+                    SCALARTOIRCC.put(thingUID, irccUrl);
                     return createResult(device, thingUID, irccUrl);
                 }
             } else {
-                scalarToIrcc.put(thingUID, irccUrl);
+                SCALARTOIRCC.put(thingUID, irccUrl);
             }
             return null;
         }
@@ -127,14 +128,14 @@ public class ScalarWebDiscoveryParticipant extends AbstractDiscoveryParticipant 
 
         String irccUrl = null;
         if (irccService == null) {
-            if (scalarToIrcc.containsKey(uid)) {
-                irccUrl = scalarToIrcc.get(uid);
+            if (SCALARTOIRCC.containsKey(uid)) {
+                irccUrl = SCALARTOIRCC.get(uid);
             } else {
-                scalarToIrcc.put(uid, null);
+                SCALARTOIRCC.put(uid, null);
             }
         } else {
             irccUrl = identity.getDescriptorURL().toString();
-            scalarToIrcc.put(uid, irccUrl);
+            SCALARTOIRCC.put(uid, irccUrl);
         }
 
         return createResult(device, uid, irccUrl);

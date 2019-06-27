@@ -38,10 +38,11 @@ public interface SonyDefinitionProvider extends ThingTypeProvider, ChannelGroupT
     /**
      * Helper method to write a thing/thing type to a the source(s)
      *
-     * @param service   a non-null, non-empty service
-     * @param configUri a non-null, non-empty configUri
-     * @param modelName a non-null, non-empty model name
-     * @param thing     a non-null thing to use
+     * @param service       a non-null, non-empty service
+     * @param configUri     a non-null, non-empty configUri
+     * @param modelName     a non-null, non-empty model name
+     * @param thing         a non-null thing to use
+     * @param channelFilter a non-null channel filter to use
      * @return a String if an error occurred, a File if a file was created
      */
     void writeThing(String service, String configUri, String modelName, Thing thing, Predicate<Channel> channelFilter);

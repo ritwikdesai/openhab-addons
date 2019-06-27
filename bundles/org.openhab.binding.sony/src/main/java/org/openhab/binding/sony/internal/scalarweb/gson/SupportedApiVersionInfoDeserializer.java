@@ -29,7 +29,7 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParseException;
 
 /**
- *
+ * This class is responsible for deserializing a {@link SupportedApiVersionInfo} string
  *
  * @author Tim Roberts - Initial contribution
  */

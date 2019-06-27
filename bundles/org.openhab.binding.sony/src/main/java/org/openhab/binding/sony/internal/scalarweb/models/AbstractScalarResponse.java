@@ -17,6 +17,7 @@ import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 import org.eclipse.jdt.annotation.NonNullByDefault;
 import org.eclipse.jdt.annotation.Nullable;
@@ -29,39 +30,30 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 
 /**
- *
+ * This abstract class provides common functionality for all scalar responses.
  *
  * @author Tim Roberts - Initial contribution
  */
 @NonNullByDefault
 public abstract class AbstractScalarResponse {
+    /**
+     * An abstract method to allow the caller to get the payload of the response
+     * 
+     * @return a non-null json array
+     */
     protected abstract JsonArray getPayload();
-
-    public <T> T as(Class<T> clazz, GetClass<T> getC) throws IOException {
-        return this.as(getC.getC());
-    }
-
-    public <T> List<T> asArray(Class<T> clazz, GetClass<T> getC) throws IOException {
-        return (List<T>) this.asArray(getC.getC());
-    }
-
-    // public <T, S extends T> List<T> asArray(Class<T> clazz, GetClass<S> getC) throws IOException {
-    // return (List<T>) this.asArray(getC.getC());
-    // }
-
-    public interface GetClass<T> {
-        Class<? extends T> getC();
-    }
 
     /**
      * Converts this generic response into the specified type
      *
-     * @param       <T> the generic type that will be returned
+     * @param <T>   the generic type that will be returned
      * @param clazz the class to cast to
      * @return the object cast to class
      * @throws IOException Signals that an I/O exception has occurred.
      */
     public <T> T as(Class<T> clazz) throws IOException {
+        Objects.requireNonNull(clazz, "clazz cannot be null");
+
         // First see if there is a constructor that takes a ScalarWebResult (us)
         // If so - call it with us
         // Otherwise try to use GSON to construct the class and set the fields
@@ -92,13 +84,11 @@ public abstract class AbstractScalarResponse {
                     return gson.fromJson(elm, clazz);
                 }
             }
-            // logger.debug(">>> Couldn't do it", e);
             throw new IllegalArgumentException(
                     "Cannot construct ScalarWebResult for " + clazz + " with results: " + localResults, e);
 
         } catch (InstantiationException | IllegalAccessException | IllegalArgumentException
                 | InvocationTargetException e) {
-            // logger.debug(">>> Couldn't do it thrown", e);
             throw new IllegalArgumentException(
                     "Constructor with ScalarWebResult argument can't be called: " + e.getMessage(), e);
         }
@@ -107,14 +97,13 @@ public abstract class AbstractScalarResponse {
     /**
      * Converts this generic response into an array of the specified type
      *
-     * @param       <T> the generic type that will be returned
+     * @param <T>   the generic type that will be returned
      * @param clazz the class to cast to
      * @return a non-null, possibly empty list of objects converted to the class
      * @throws IOException Signals that an I/O exception has occurred.
      */
     public <T> List<T> asArray(Class<T> clazz) throws IOException {
-        // use a local logger
-        // final Logger logger = LoggerFactory.getLogger(ScalarWebResult.class);
+        Objects.requireNonNull(clazz, "clazz cannot be null");
 
         final JsonArray localResults = getPayload();
         final Gson gson = new Gson();

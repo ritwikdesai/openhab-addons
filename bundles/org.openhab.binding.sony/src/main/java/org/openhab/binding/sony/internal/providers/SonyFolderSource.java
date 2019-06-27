@@ -117,6 +117,7 @@ public class SonyFolderSource implements SonySource {
         SonyUtil.createFolder(FOLDERDEFTHINGTYPES);
         SonyUtil.createFolder(FOLDERDEFCAPABILITY);
 
+        // Setup our watcher
         watcher.getAndSet(scheduler.submit(new Watcher()));
 
         // Keeps the watcher alive in case it encounters an error

@@ -20,23 +20,46 @@ import org.eclipse.jdt.annotation.Nullable;
  * @author Tim Roberts - Initial contribution
  */
 public class DabInfo {
+    /** The DAB component label */
     private @Nullable String componentLabel;
+
+    /** The DAB dynamic label */
     private @Nullable String dynamicLabel;
+
+    /** The DAB ensemble label */
     private @Nullable String ensembleLabel;
+
+    /** The DAB service label */
     private @Nullable String serviceLabel;
 
+    /**
+     * Returns the DAB component label
+     * @return the component label
+     */
     public @Nullable String getComponentLabel() {
         return componentLabel;
     }
 
+    /**
+     * Returns the DAB dynamic label
+     * @return the dynamic label
+     */
     public @Nullable String getDynamicLabel() {
         return dynamicLabel;
     }
 
+    /**
+     * Returns the DAB ensemble label
+     * @return the ensemble label
+     */
     public @Nullable String getEnsembleLabel() {
         return ensembleLabel;
     }
 
+    /**
+     * Returns the DAB service label
+     * @return the service label
+     */
     public @Nullable String getServiceLabel() {
         return serviceLabel;
     }

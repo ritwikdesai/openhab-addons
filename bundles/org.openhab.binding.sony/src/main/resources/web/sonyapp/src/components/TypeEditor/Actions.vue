@@ -1,7 +1,7 @@
 <template>
   <div class='actions'>
     <FileRead id="loadFile" icon="upload" title="Load File" callback="type/loadFile"/>
-    <label v-bind="fileName" class='title'> {{ fileName }}</label>
+    <label class='title'> {{ fileName }}</label>
     <button id="execute" uib-tooltip="Save" v-on:click="saveFile()"><font-awesome-icon icon="save" />Save</button>
   </div>
 </template>

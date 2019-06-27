@@ -16,12 +16,13 @@ import org.eclipse.jdt.annotation.NonNullByDefault;
 import org.eclipse.jdt.annotation.Nullable;
 
 /**
- *
+ * This class represents a preset broadcast station and is used for serialization only
  *
  * @author Tim Roberts - Initial contribution
  */
 @NonNullByDefault
 public class PresetBroadcastStation {
+    /** The URI to  */
     private final String uri;
     private final @Nullable String frequency;
 
