@@ -14,11 +14,9 @@ package org.openhab.binding.sony.internal.ircc;
 
 import java.util.Map;
 
-import org.apache.commons.lang.StringUtils;
 import org.eclipse.jdt.annotation.NonNullByDefault;
 import org.eclipse.jdt.annotation.Nullable;
 import org.openhab.binding.sony.internal.AbstractConfig;
-import org.openhab.binding.sony.internal.SonyUtil;
 
 /**
  * Configuration class for the {@link IrccHandler}.
@@ -41,23 +39,6 @@ public class IrccConfig extends AbstractConfig {
      */
     public @Nullable String getAccessCode() {
         return accessCode;
-    }
-
-    /**
-     * Gets the access code nbr
-     *
-     * @return the access code nb
-     */
-    public @Nullable Integer getAccessCodeNbr() {
-        if (StringUtils.isEmpty(accessCode)) {
-            return null;
-        }
-
-        try {
-            return Integer.parseInt(accessCode);
-        } catch (NumberFormatException e) {
-            return null;
-        }
     }
 
     /**
@@ -90,8 +71,8 @@ public class IrccConfig extends AbstractConfig {
     @Override
     public Map<String, Object> asProperties() {
         final Map<String, Object> props = super.asProperties();
-        props.put("accessCode", SonyUtil.convertNull(accessCode, ""));
-        props.put("commandsMapFile", SonyUtil.convertNull(commandsMapFile, ""));
+        conditionallyAddProperty(props, "accessCode", accessCode);
+        conditionallyAddProperty(props, "commandsMapFile", commandsMapFile);
         return props;
     }
 }

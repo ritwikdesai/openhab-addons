@@ -15,7 +15,6 @@ package org.openhab.binding.sony.internal.ircc;
 import java.io.File;
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
-import java.net.URL;
 import java.net.URLDecoder;
 import java.net.URLEncoder;
 import java.nio.charset.Charset;
@@ -45,7 +44,9 @@ import org.eclipse.smarthome.core.thing.ThingStatusDetail;
 import org.eclipse.smarthome.core.transform.TransformationException;
 import org.eclipse.smarthome.core.transform.TransformationService;
 import org.eclipse.smarthome.core.types.UnDefType;
+import org.openhab.binding.sony.internal.AccessCheckResult;
 import org.openhab.binding.sony.internal.LoginUnsuccessfulResponse;
+import org.openhab.binding.sony.internal.SonyAuth;
 import org.openhab.binding.sony.internal.SonyUtil;
 import org.openhab.binding.sony.internal.ThingCallback;
 import org.openhab.binding.sony.internal.ircc.models.IrccClient;
@@ -56,15 +57,13 @@ import org.openhab.binding.sony.internal.ircc.models.IrccRemoteCommands;
 import org.openhab.binding.sony.internal.ircc.models.IrccStatus;
 import org.openhab.binding.sony.internal.ircc.models.IrccStatusItem;
 import org.openhab.binding.sony.internal.ircc.models.IrccStatusList;
-import org.openhab.binding.sony.internal.ircc.models.IrccSystemInformation;
 import org.openhab.binding.sony.internal.ircc.models.IrccText;
 import org.openhab.binding.sony.internal.ircc.models.IrccUnrDeviceInfo;
-import org.openhab.binding.sony.internal.net.Header;
-import org.openhab.binding.sony.internal.net.HttpRequest;
 import org.openhab.binding.sony.internal.net.HttpResponse;
-import org.openhab.binding.sony.internal.net.NetUtil;
 import org.openhab.binding.sony.internal.net.SocketSession;
-import org.openhab.binding.sony.internal.upnp.models.UpnpService;
+import org.openhab.binding.sony.internal.transports.SonyTransport;
+import org.openhab.binding.sony.internal.transports.SonyTransportFactory;
+import org.openhab.binding.sony.internal.transports.TransportOptionAutoAuth;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -92,8 +91,8 @@ class IrccProtocol<T extends ThingCallback<String>> implements AutoCloseable {
     /** The callback that we use to (ehm) callback */
     private final T callback;
 
-    /** The {@link HttpRequest} to use */
-    private final HttpRequest httpRequest;
+    /** The {@link SonyTransport} to use */
+    private final SonyTransport transport;
 
     /** The transform service to use to transform commands with */
     private final @Nullable TransformationService transformService;
@@ -114,6 +113,9 @@ class IrccProtocol<T extends ThingCallback<String>> implements AutoCloseable {
     /** If viewing content, the current content identifier */
     private final AtomicReference<@Nullable String> contentId = new AtomicReference<>();
 
+    /** The authorization service */
+    private final SonyAuth sonyAuth;
+
     /**
      * Constructs the protocol handler from given parameters.
      *
@@ -130,19 +132,12 @@ class IrccProtocol<T extends ThingCallback<String>> implements AutoCloseable {
         this.callback = callback;
 
         this.transformService = transformService;
-        httpRequest = NetUtil.createHttpRequest();
 
-        final Integer accessCodeNbr = config.getAccessCodeNbr();
-        if (accessCodeNbr != null) {
-            httpRequest.addHeader(NetUtil.createAccessCodeHeader(accessCodeNbr));
-        }
+        SonyUtil.sendWakeOnLan(logger, config.getDeviceIpAddress(), config.getDeviceMacAddress());
 
-        irccClient = new IrccClient(config.getDeviceUrl().toExternalForm());
-
-        // Add the specified deviceid header from the system info
-        final IrccSystemInformation sysInfo = irccClient.getSystemInformation();
-        final String deviceIdHeader = sysInfo.getActionHeader();
-        httpRequest.addHeader("X-" + deviceIdHeader, NetUtil.getDeviceId());
+        this.irccClient = new IrccClient(config.getDeviceUrl().toExternalForm());
+        this.transport = SonyTransportFactory.createHttpTransport(irccClient.getBaseUrl().toExternalForm());
+        this.sonyAuth = new SonyAuth(() -> irccClient);
     }
 
     /**
@@ -166,58 +161,38 @@ class IrccProtocol<T extends ThingCallback<String>> implements AutoCloseable {
      */
     @Nullable
     LoginUnsuccessfulResponse login() throws IOException {
-        final HttpResponse status = irccClient.getStatus();
-        if (status.getHttpCode() == HttpStatus.FORBIDDEN_403) {
-            final String accessCode = config.getAccessCode();
-            if (StringUtils.equalsIgnoreCase(IrccConstants.ACCESSCODE_RQST, accessCode)) {
-                final HttpResponse accessCodeResponse = registerAccessCode(null);
-                if (accessCodeResponse.getHttpCode() == HttpStatus.OK_200) {
-                    // GOOD! AVs are only a single step authorization process
-                } else if (accessCodeResponse.getHttpCode() == HttpStatus.UNAUTHORIZED_401) {
-                    return new LoginUnsuccessfulResponse(ThingStatusDetail.CONFIGURATION_ERROR,
-                            "Access Code requested. Please update the Access Code with what is shown on the device screen");
-                } else if (accessCodeResponse.getHttpCode() == HttpStatus.SERVICE_UNAVAILABLE_503) {
-                    return new LoginUnsuccessfulResponse(ThingStatusDetail.CONFIGURATION_ERROR,
-                            "Unable to request an access code - HOME menu not displayed on device. Please display the home menu and try again.");
-                } else {
-                    return new LoginUnsuccessfulResponse(ThingStatusDetail.CONFIGURATION_ERROR,
-                            "Access code request error: " + accessCodeResponse.getHttpCode() + " ("
-                                    + accessCodeResponse.getContent() + ")");
-                }
-            } else if (StringUtils.isNotBlank(accessCode)) {
-                try {
-                    final int accessCodeNbr = Integer.parseInt(accessCode);
-                    if (accessCodeNbr > 9999) {
-                        return new LoginUnsuccessfulResponse(ThingStatusDetail.CONFIGURATION_ERROR,
-                                "Access code cannot be greater than 4 digits");
-                    }
-                    final HttpResponse registerResponse = registerAccessCode(accessCodeNbr);
-                    if (registerResponse.getHttpCode() == HttpStatus.OK_200) {
-                        // GOOD!
-                    } else if (registerResponse.getHttpCode() == HttpStatus.UNAUTHORIZED_401) {
-                        return new LoginUnsuccessfulResponse(ThingStatusDetail.CONFIGURATION_ERROR,
-                                "Access code was not accepted - please either request a new one or verify number matches what's shown on the device");
-                    } else {
-                        return new LoginUnsuccessfulResponse(ThingStatusDetail.CONFIGURATION_ERROR,
-                                "Access code was not accepted: " + registerResponse.getHttpCode() + " ("
-                                        + registerResponse.getContent() + ")");
-                    }
+        transport.setOption(TransportOptionAutoAuth.FALSE);
 
-                } catch (NumberFormatException e) {
-                    return new LoginUnsuccessfulResponse(ThingStatusDetail.CONFIGURATION_ERROR,
-                            "Access code is not " + IrccConstants.ACCESSCODE_RQST + " or a number!");
-                }
-            } else {
+        SonyUtil.sendWakeOnLan(logger, config.getDeviceIpAddress(), config.getDeviceMacAddress());
+        final HttpResponse status = getStatus();
+
+        // If we were forbidden (to get the status) or got a service unavailable (no get status) - try to register
+        if (status.getHttpCode() == HttpStatus.FORBIDDEN_403
+                || status.getHttpCode() == HttpStatus.SERVICE_UNAVAILABLE_503) {
+            final String accessCode = config.getAccessCode();
+            if (StringUtils.isEmpty(accessCode)) {
                 return new LoginUnsuccessfulResponse(ThingStatusDetail.CONFIGURATION_ERROR,
                         "Access code cannot be blank");
+            } else {
+                final AccessCheckResult result = sonyAuth.requestAccess(transport,
+                        StringUtils.equalsIgnoreCase(IrccConstants.ACCESSCODE_RQST, accessCode) ? null : accessCode);
+                if (result == AccessCheckResult.OK) {
+                    // GOOD!
+                } else {
+                    return new LoginUnsuccessfulResponse(ThingStatusDetail.CONFIGURATION_ERROR, result.getMsg());
+                }
             }
         } else {
-            final HttpResponse resp = registerRenewal();
-            if (resp.getHttpCode() != HttpStatus.OK_200 && resp.getHttpCode() != HttpStatus.SERVICE_UNAVAILABLE_503) {
+            final AccessCheckResult resp = sonyAuth.registerRenewal(transport);
+            if (resp != AccessCheckResult.OK) {
+                // Use configuration_error - prevents handler from continually trying to
+                // reconnect
                 return new LoginUnsuccessfulResponse(ThingStatusDetail.CONFIGURATION_ERROR,
-                        "Error registering renewal: " + resp.getContent());
+                        "Error registering renewal: " + resp.getMsg());
             }
         }
+
+        transport.setOption(TransportOptionAutoAuth.TRUE);
 
         writeCommands();
 
@@ -230,67 +205,16 @@ class IrccProtocol<T extends ThingCallback<String>> implements AutoCloseable {
     }
 
     /**
-     * Register the specified access code
+     * Gets the current status from the IRCC device
      *
-     * @param accessCode the possibly null access code
-     * @return the non-null {@link HttpResponse}
+     * @return the non-null HttpResponse of the request
      */
-    private HttpResponse registerAccessCode(@Nullable Integer accessCode) {
-        final String registerUrl = irccClient.getUrlForAction(IrccClient.AN_REGISTER);
-        if (registerUrl == null) {
-            return new HttpResponse(HttpStatus.SERVICE_UNAVAILABLE_503, "Register action is not supported");
-        }
-
-        // Do the registration first with what the mode says,
-        // then try it again with the other mode (so registration mode sometimes lie)
-        final String[] registrationTypes = new String[2];
-        if (irccClient.getRegistrationMode() == 2) {
-            registrationTypes[0] = "new";
-            registrationTypes[1] = "initial";
+    public HttpResponse getStatus() {
+        final String statusUrl = irccClient.getUrlForAction(IrccClient.AN_GETSTATUS);
+        if (statusUrl == null) {
+            return new HttpResponse(HttpStatus.SERVICE_UNAVAILABLE_503, "No GETSTATUS url");
         } else {
-            registrationTypes[0] = "initial";
-            registrationTypes[1] = "new";
-        }
-
-        final Header[] headers = accessCode == null ? new Header[0]
-                : new Header[] { NetUtil.createAuthHeader(accessCode) };
-        try {
-            final String rqst = "?name=" + URLEncoder.encode(NetUtil.getDeviceName(), "UTF-8") + "&registrationType="
-                    + registrationTypes[0] + "&deviceId=" + URLEncoder.encode(NetUtil.getDeviceId(), "UTF-8");
-            final HttpResponse resp = sendGetCommand(registerUrl + rqst, headers);
-            if (resp.getHttpCode() != HttpStatus.BAD_REQUEST_400) {
-                return resp;
-            }
-        } catch (UnsupportedEncodingException e) {
-            // do nothing for now
-        }
-
-        try {
-            final String rqst = "?name=" + URLEncoder.encode(NetUtil.getDeviceName(), "UTF-8") + "&registrationType="
-                    + registrationTypes[1] + "&deviceId=" + URLEncoder.encode(NetUtil.getDeviceId(), "UTF-8");
-            return sendGetCommand(registerUrl + rqst, headers);
-        } catch (UnsupportedEncodingException e) {
-            return new HttpResponse(HttpStatus.SERVICE_UNAVAILABLE_503, e.toString());
-        }
-    }
-
-    /**
-     * Register an access renewal
-     *
-     * @return the non-null {@link HttpResponse}
-     */
-    private HttpResponse registerRenewal() {
-        try {
-            final String registerUrl = irccClient.getUrlForAction(IrccClient.AN_REGISTER);
-            if (registerUrl == null) {
-                return new HttpResponse(HttpStatus.SERVICE_UNAVAILABLE_503, "Register action is not supported");
-            }
-
-            final String parms = "?name=" + URLEncoder.encode(NetUtil.getDeviceName(), "UTF-8")
-                    + "&registrationType=renewal&deviceId=" + URLEncoder.encode(NetUtil.getDeviceId(), "UTF-8");
-            return sendGetCommand(registerUrl + parms);
-        } catch (UnsupportedEncodingException e) {
-            return new HttpResponse(HttpStatus.SERVICE_UNAVAILABLE_503, e.toString());
+            return transport.executeGet(statusUrl);
         }
     }
 
@@ -333,32 +257,6 @@ class IrccProtocol<T extends ThingCallback<String>> implements AutoCloseable {
     }
 
     /**
-     * Send a get command to the specified URL
-     *
-     * @param url     non-null, non-empty url to send to
-     * @param headers the possibly null, possibly empty headers
-     * @return the non-null {@link HttpResponse}
-     */
-    private HttpResponse sendGetCommand(String url, Header... headers) {
-        Validate.notEmpty(url, "url cannot be empty");
-        return httpRequest.sendGetCommand(url, headers);
-    }
-
-    /**
-     * Send a post command with the specified XML body to the specified URL
-     *
-     * @param url     non-null, non-empty url to send to
-     * @param body    the non-null, possibly empty XML body to send
-     * @param headers the possibly null, possibly empty headers
-     * @return the non-null {@link HttpResponse}
-     */
-    private HttpResponse sendPostCommand(String url, String body, Header... headers) {
-        Validate.notEmpty(url, "url cannot be empty");
-        Objects.requireNonNull(body, "body cannot be empty");
-        return httpRequest.sendPostXmlCommand(url, body, headers);
-    }
-
-    /**
      * Refresh the state for this protocol (currently only calls {@link #refreshStatus})
      */
     public void refreshState() {
@@ -375,7 +273,7 @@ class IrccProtocol<T extends ThingCallback<String>> implements AutoCloseable {
             return;
         }
 
-        final HttpResponse resp = sendGetCommand(getStatusUrl);
+        final HttpResponse resp = transport.executeGet(getStatusUrl);
         if (resp.getHttpCode() == HttpStatus.OK_200) {
             callback.stateChanged(SonyUtil.createChannelId(IrccConstants.GRP_PRIMARY, IrccConstants.CHANNEL_POWER),
                     OnOffType.ON);
@@ -539,7 +437,7 @@ class IrccProtocol<T extends ThingCallback<String>> implements AutoCloseable {
             return;
         }
 
-        final HttpResponse resp = sendGetCommand(getTextUrl);
+        final HttpResponse resp = transport.executeGet(getTextUrl);
         if (resp.getHttpCode() == HttpStatus.OK_200) {
             final String irccTextXml = resp.getContent();
             final IrccText irccText = IrccText.get(irccTextXml);
@@ -570,7 +468,7 @@ class IrccProtocol<T extends ThingCallback<String>> implements AutoCloseable {
             return;
         }
 
-        final HttpResponse resp = sendGetCommand(getContentUrl);
+        final HttpResponse resp = transport.executeGet(getContentUrl);
         if (resp.getHttpCode() == HttpStatus.OK_200) {
             final String irccContentUrlXml = resp.getContent();
             final IrccContentUrl irccContent = IrccContentUrl.get(irccContentUrlXml);
@@ -617,7 +515,7 @@ class IrccProtocol<T extends ThingCallback<String>> implements AutoCloseable {
             return;
         }
 
-        final HttpResponse resp = sendGetCommand(getContentUrl);
+        final HttpResponse resp = transport.executeGet(getContentUrl);
         if (resp.getHttpCode() == HttpStatus.OK_200) {
             final String irccContentXml = resp.getContent();
             final IrccContentInformation irccContent = IrccContentInformation.get(irccContentXml);
@@ -736,21 +634,7 @@ class IrccProtocol<T extends ThingCallback<String>> implements AutoCloseable {
     public void sendPower(boolean turnOn) {
         final IrccRemoteCommands cmds = irccClient.getRemoteCommands();
         if (turnOn) {
-            final String deviceIpAddress = config.getDeviceIpAddress();
-            final String deviceMacAddress = config.getDeviceMacAddress();
-            if (deviceIpAddress != null && deviceMacAddress != null && StringUtils.isNotBlank(deviceIpAddress)
-                    && StringUtils.isNotBlank(deviceMacAddress)) {
-                try {
-                    NetUtil.sendWol(deviceIpAddress, deviceMacAddress);
-                    logger.debug("WOL packet sent to {}", config.getDeviceMacAddress());
-                } catch (IOException e) {
-                    logger.warn("Exception occurred sending WOL packet to {}: {}", config.getDeviceMacAddress(), e);
-                }
-            } else {
-                logger.debug(
-                        "WOL packet is not supported - specify the IP address and mac address in config if you want a WOL packet sent");
-            }
-
+            SonyUtil.sendWakeOnLan(logger, config.getDeviceIpAddress(), config.getDeviceMacAddress());
             final IrccRemoteCommand powerOn = cmds.getPowerOn();
             if (powerOn != null) {
                 sendIrccCommand(powerOn.getCmd());
@@ -813,7 +697,7 @@ class IrccProtocol<T extends ThingCallback<String>> implements AutoCloseable {
         } else if (StringUtils.equalsIgnoreCase(IrccRemoteCommand.IRCC, protocol)) {
             sendIrccCommand(cmdToSend);
         } else if (StringUtils.equalsIgnoreCase(IrccRemoteCommand.URL, protocol)) {
-            final HttpResponse resp = sendGetCommand(cmdToSend);
+            final HttpResponse resp = transport.executeGet(cmdToSend);
             if (resp.getHttpCode() == HttpStatus.OK_200) {
                 // yay!
             } else if (resp.getHttpCode() == HttpStatus.SERVICE_UNAVAILABLE_503) {
@@ -834,32 +718,13 @@ class IrccProtocol<T extends ThingCallback<String>> implements AutoCloseable {
     private void sendIrccCommand(String cmdToSend) {
         Validate.notEmpty(cmdToSend, "cmdToSend cannot be empty");
 
-        final UpnpService service = irccClient.getService(IrccClient.SRV_IRCC);
-        if (service == null) {
-            logger.error("IRCC Service was not found");
-            return;
-        }
-
-        final String soap = irccClient.getSOAP(IrccClient.SRV_IRCC, IrccClient.SRV_ACTION_SENDIRCC, cmdToSend);
-        if (soap == null || StringUtils.isEmpty(soap)) {
-            logger.debug("Unable to find the IRCC service/action to send IRCC");
-            return;
-        }
-
-        final URL baseUrl = irccClient.getBaseUrl();
-        final URL controlUrl = service.getControlUrl(baseUrl);
-        if (controlUrl == null) {
-            logger.debug("Control URL not found for base url: {}", baseUrl);
+        final HttpResponse resp = irccClient.executeSoap(transport, cmdToSend);
+        if (resp.getHttpCode() == HttpStatus.OK_200) {
+            // yay!
+        } else if (resp.getHttpCode() == HttpStatus.SERVICE_UNAVAILABLE_503) {
+            logger.debug("IRCC service is unavailable (power off?)");
         } else {
-            final HttpResponse resp = sendPostCommand(controlUrl.toExternalForm(), soap, new Header("SOAPACTION",
-                    "\"" + service.getServiceType() + "#" + IrccClient.SRV_ACTION_SENDIRCC + "\""));
-            if (resp.getHttpCode() == HttpStatus.OK_200) {
-                // yay!
-            } else if (resp.getHttpCode() == HttpStatus.SERVICE_UNAVAILABLE_503) {
-                logger.debug("IRCC service is unavailable (power off?)");
-            } else {
-                logger.error("Bad return code from {}: {}", IrccClient.SRV_ACTION_SENDIRCC, resp);
-            }
+            logger.error("Bad return code from {}: {}", IrccClient.SRV_ACTION_SENDIRCC, resp);
         }
     }
 
@@ -877,7 +742,7 @@ class IrccProtocol<T extends ThingCallback<String>> implements AutoCloseable {
             return;
         }
         final String body = "<contentUrl><url>" + contentUrl + "</url></contentUrl>";
-        final HttpResponse resp = sendPostCommand(sendContentUrl, body);
+        final HttpResponse resp = transport.executePostXml(sendContentUrl, body);
         if (resp.getHttpCode() == HttpStatus.OK_200) {
             // Do nothing
         } else if (resp.getHttpCode() == HttpStatus.SERVICE_UNAVAILABLE_503) {
@@ -902,7 +767,7 @@ class IrccProtocol<T extends ThingCallback<String>> implements AutoCloseable {
 
         try {
             final String textParm = "?text=" + URLEncoder.encode(text, "UTF-8");
-            final HttpResponse resp = sendGetCommand(sendTextUrl + textParm);
+            final HttpResponse resp = transport.executeGet(sendTextUrl + textParm);
             if (resp.getHttpCode() == HttpStatus.OK_200) {
                 // yeah!
             } else if (resp.getHttpCode() == HttpStatus.NOT_ACCEPTABLE_406) {
@@ -920,7 +785,6 @@ class IrccProtocol<T extends ThingCallback<String>> implements AutoCloseable {
 
     @Override
     public void close() {
-        irccClient.close();
-        httpRequest.close();
+
     }
 }

@@ -117,13 +117,13 @@ class ScalarWebAudioProtocol<T extends ThingCallback<String>> extends AbstractSc
             if (VersionUtilities.equals(version, ScalarWebMethod.V1_0)) {
                 for (VolumeInformation_1_0 vi : execute(ScalarWebMethod.GETVOLUMEINFORMATION)
                         .asArray(VolumeInformation_1_0.class)) {
-                    addDescriptor(descriptors, cache, vi.getTarget(), vi.getTarget(), vi.getMinVolume(),
+                    addVolumeDescriptors(descriptors, cache, vi.getTarget(), vi.getTarget(), vi.getMinVolume(),
                             vi.getMaxVolume());
                 }
             } else if (VersionUtilities.equals(version, ScalarWebMethod.V1_1)) {
                 for (VolumeInformation_1_1 vi : execute(ScalarWebMethod.GETVOLUMEINFORMATION, new Output())
                         .asArray(VolumeInformation_1_1.class)) {
-                    addDescriptor(descriptors, cache, vi.getOutput(), termTitles.get(vi.getOutput()), vi.getMinVolume(),
+                    addVolumeDescriptors(descriptors, cache, vi.getOutput(), termTitles.get(vi.getOutput()), vi.getMinVolume(),
                             vi.getMaxVolume());
                 }
 
@@ -146,8 +146,20 @@ class ScalarWebAudioProtocol<T extends ThingCallback<String>> extends AbstractSc
         return descriptors;
     }
 
-    private void addDescriptor(List<ScalarWebChannelDescriptor> descriptors, ChannelIdCache cache,
+    /**
+     * Helper method to add volume descriptors for the specified parameters
+     * @param descriptors a non-null, possibly empty list of descriptors to add too
+     * @param cache a non-null channel id cache
+     * @param viKey a possibly null, possibly empty volume information key
+     * @param outputLabel a possibly null, possibly emtpy output label to assign
+     * @param min a possibly null minimum volume level
+     * @param max a possibly null maximum volume level
+     */
+    private void addVolumeDescriptors(List<ScalarWebChannelDescriptor> descriptors, ChannelIdCache cache,
             @Nullable String viKey, @Nullable String outputLabel, @Nullable Integer min, @Nullable Integer max) {
+        Objects.requireNonNull(descriptors, "descriptors cannot be null");
+        Objects.requireNonNull(cache, "cache cannot be null");
+
         final String key = viKey == null || StringUtils.isEmpty(viKey) ? DEFAULTKEY : viKey;
         final String label = outputLabel == null ? WordUtils.capitalize(key) : outputLabel;
         final String id = cache.getUniqueChannelId(key).toLowerCase();
@@ -215,7 +227,13 @@ class ScalarWebAudioProtocol<T extends ThingCallback<String>> extends AbstractSc
         }
     }
 
+    /**
+     * Helper method to refresh volume information based on a set of channels
+     * @param channels a non-null, possibly empty list of channels
+     */
     private void refreshVolume(List<ScalarWebChannel> channels) {
+        Objects.requireNonNull(channels, "channels cannot be null");
+
         try {
             final String version = getService().getVersion(ScalarWebMethod.GETVOLUMEINFORMATION);
             if (VersionUtilities.equals(version, ScalarWebMethod.V1_0)) {
@@ -312,10 +330,13 @@ class ScalarWebAudioProtocol<T extends ThingCallback<String>> extends AbstractSc
      * Sets the volume for the specified target
      *
      * @param key    the non-null, possibly empty (default zone) key
-     * @param volume the volume
+     * @param chl the non-null target channel 
+     * @param cmd the non-null command
      */
     private void setVolume(String key, ScalarWebChannel chl, PercentType cmd) {
         Objects.requireNonNull(key, "key cannot be null");
+        Objects.requireNonNull(chl, "chl cannot be null");
+        Objects.requireNonNull(cmd, "cmd cannot be null");
 
         final StateDescription sd = getContext().getStateProvider().getStateDescription(getContext().getThingUID(),
                 chl.getChannelId());
@@ -361,29 +382,37 @@ class ScalarWebAudioProtocol<T extends ThingCallback<String>> extends AbstractSc
     @Override
     protected void eventReceived(ScalarWebEvent event) throws IOException {
         switch (event.getMethod()) {
-        case ScalarWebEvent.NOTIFYVOLUMEINFORMATION:
-            final String version = getVersion(ScalarWebMethod.GETVOLUMEINFORMATION);
-            final List<ScalarWebChannel> channels = getChannelTracker().getLinkedChannelsForCategory(VOLUME, MUTE);
+            case ScalarWebEvent.NOTIFYVOLUMEINFORMATION:
+                final String version = getVersion(ScalarWebMethod.GETVOLUMEINFORMATION);
+                final List<ScalarWebChannel> channels = getChannelTracker().getLinkedChannelsForCategory(VOLUME, MUTE);
 
-            if (VersionUtilities.equals(version, ScalarWebMethod.V1_0)) {
-                final VolumeInformation_1_0 vi = event.as(VolumeInformation_1_0.class);
-                notifyVolumeInformation(vi, channels);
-            } else if (VersionUtilities.equals(version, ScalarWebMethod.V1_1)) {
-                final VolumeInformation_1_1 vi = event.as(VolumeInformation_1_1.class);
-                notifyVolumeInformation(vi, channels);
-            } else {
-                logger.debug("Unknown {} method version: {}", ScalarWebEvent.NOTIFYVOLUMEINFORMATION, version);
-            }
+                if (VersionUtilities.equals(version, ScalarWebMethod.V1_0)) {
+                    final VolumeInformation_1_0 vi = event.as(VolumeInformation_1_0.class);
+                    notifyVolumeInformation(vi, channels);
+                } else if (VersionUtilities.equals(version, ScalarWebMethod.V1_1)) {
+                    final VolumeInformation_1_1 vi = event.as(VolumeInformation_1_1.class);
+                    notifyVolumeInformation(vi, channels);
+                } else {
+                    logger.debug("Unknown {} method version: {}", ScalarWebEvent.NOTIFYVOLUMEINFORMATION, version);
+                }
 
-            break;
+                break;
 
-        default:
-            logger.debug("Unhandled event received: {}", event);
-            break;
+            default:
+                logger.debug("Unhandled event received: {}", event);
+                break;
         }
     }
 
+    /**
+     * The method that will handle notification of a volume change
+     * @param vi a non-null volume information
+     * @param channels a non-null, possibly empty list of chanenls to notify
+     */
     private void notifyVolumeInformation(VolumeInformation_1_0 vi, List<ScalarWebChannel> channels) {
+        Objects.requireNonNull(vi, "vi cannot be null");
+        Objects.requireNonNull(channels, "channels cannot be null");
+
         for (ScalarWebChannel chnl : channels) {
             final String viKey = vi.getTarget();
             final String key = viKey == null || StringUtils.isEmpty(viKey) ? DEFAULTKEY : viKey;
@@ -416,7 +445,15 @@ class ScalarWebAudioProtocol<T extends ThingCallback<String>> extends AbstractSc
         }
     }
 
+    /**
+     * The method that will handle notification of a volume change
+     * @param vi a non-null volume information
+     * @param channels a non-null, possibly empty list of chanenls to notify
+     */
     private void notifyVolumeInformation(VolumeInformation_1_1 vi, List<ScalarWebChannel> channels) {
+        Objects.requireNonNull(vi, "vi cannot be null");
+        Objects.requireNonNull(channels, "channels cannot be null");
+
         for (ScalarWebChannel chnl : channels) {
             final String viKey = vi.getOutput();
             final String key = viKey == null || StringUtils.isEmpty(viKey) ? DEFAULTKEY : viKey;
@@ -448,6 +485,5 @@ class ScalarWebAudioProtocol<T extends ThingCallback<String>> extends AbstractSc
                 }
             }
         }
-
     }
 }

@@ -14,24 +14,37 @@ package org.openhab.binding.sony.internal.dial;
 
 import java.io.IOException;
 import java.net.URL;
-import java.util.List;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Objects;
 
 import org.apache.commons.lang.StringUtils;
 import org.apache.commons.lang.Validate;
 import org.eclipse.jdt.annotation.NonNullByDefault;
+import org.eclipse.jdt.annotation.Nullable;
 import org.eclipse.jetty.http.HttpStatus;
 import org.eclipse.smarthome.core.library.types.OnOffType;
 import org.eclipse.smarthome.core.library.types.RawType;
 import org.eclipse.smarthome.core.library.types.StringType;
+import org.eclipse.smarthome.core.thing.ThingStatusDetail;
 import org.eclipse.smarthome.core.types.UnDefType;
+import org.openhab.binding.sony.internal.AccessCheckResult;
+import org.openhab.binding.sony.internal.LoginUnsuccessfulResponse;
+import org.openhab.binding.sony.internal.SonyAuth;
+import org.openhab.binding.sony.internal.SonyUtil;
 import org.openhab.binding.sony.internal.ThingCallback;
 import org.openhab.binding.sony.internal.dial.models.DialApp;
 import org.openhab.binding.sony.internal.dial.models.DialAppState;
 import org.openhab.binding.sony.internal.dial.models.DialClient;
-import org.openhab.binding.sony.internal.net.HttpRequest;
+import org.openhab.binding.sony.internal.dial.models.DialDeviceInfo;
+import org.openhab.binding.sony.internal.dial.models.DialService;
 import org.openhab.binding.sony.internal.net.HttpResponse;
 import org.openhab.binding.sony.internal.net.NetUtil;
+import org.openhab.binding.sony.internal.transports.SonyTransport;
+import org.openhab.binding.sony.internal.transports.SonyTransportFactory;
+import org.openhab.binding.sony.internal.transports.TransportOptionAutoAuth;
+import org.openhab.binding.sony.internal.transports.TransportOptionHeader;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -49,16 +62,22 @@ class DialProtocol<T extends ThingCallback<String>> implements AutoCloseable {
     private Logger logger = LoggerFactory.getLogger(DialProtocol.class);
 
     /** The DIAL device full address */
-    private final String deviceUrl;
+    private final String deviceUrlStr;
 
     /** The {@link ThingCallback} that we can callback to set state and status */
     private final T callback;
 
-    /** The {@link HttpRequest} used to make http requests */
-    private final HttpRequest httpRequest;
+    /** The {@link SonyTransport} used to make http requests */
+    private final SonyTransport transport;
 
     /** The {@link DialClient} representing the DIAL application */
     private final DialClient dialClient;
+
+    /** The configuration for the dial device */
+    private final DialConfig config;
+
+    /** The authorization service */
+    private final SonyAuth sonyAuth;
 
     /**
      * Constructs the protocol handler from the configuration and callback
@@ -75,22 +94,69 @@ class DialProtocol<T extends ThingCallback<String>> implements AutoCloseable {
         final String deviceAddress = config.getDeviceAddress();
         final URL deviceURL = new URL(deviceAddress);
 
-        this.deviceUrl = deviceURL.toExternalForm();
+        this.config = config;
+        this.deviceUrlStr = deviceURL.toExternalForm();
 
         this.callback = callback;
 
-        httpRequest = NetUtil.createHttpRequest();
+        transport = SonyTransportFactory.createHttpTransport(deviceUrlStr);
 
-        final String deviceMacAddress = config.getDeviceMacAddress();
-        if (deviceMacAddress != null && StringUtils.isNotBlank(deviceMacAddress)) {
-            NetUtil.sendWol(deviceURL.getHost(), deviceMacAddress);
-        }
 
-        final DialClient dialClient = DialClient.get(this.deviceUrl, false);
+        SonyUtil.sendWakeOnLan(logger, config.getDeviceIpAddress(), config.getDeviceMacAddress());
+        final DialClient dialClient = DialClient.get(transport, this.deviceUrlStr);
         if (dialClient == null) {
             throw new IOException("DialState could not be retrieved from " + deviceAddress);
         }
         this.dialClient = dialClient;
+
+        this.sonyAuth = new SonyAuth(deviceURL);
+    }
+
+    /**
+     * Attempts to log into the system. This method will attempt to get the current applications list. If the current
+     * application list is forbidden, we attempt to register the device (either by registring the access code or
+     * requesting an access code).  If we get the current application list, we simply renew our registration code.
+     *
+     * @return a non-null {@link LoginUnsuccessfulResponse} if we can't login (usually pending access) or null if the
+     *         login was successful
+     *
+     * @throws IOException if an io exception occurs to the IRCC device
+     */
+    @Nullable
+    LoginUnsuccessfulResponse login() throws IOException {
+
+        transport.setOption(TransportOptionAutoAuth.FALSE);
+
+        SonyUtil.sendWakeOnLan(logger, config.getDeviceIpAddress(), config.getDeviceMacAddress());
+
+        boolean needsAuth = false;
+        for (DialDeviceInfo info : dialClient.getDeviceInfos()) {
+            final String appsListUrl = info.getAppsListUrl();
+            final HttpResponse resp = getApplicationList(appsListUrl);
+            if (resp.getHttpCode() == HttpStatus.FORBIDDEN_403) {
+                needsAuth = true;
+                break;
+            }
+        }
+
+        if (needsAuth) {
+            final String accessCode = config.getAccessCode();
+            if (StringUtils.isEmpty(accessCode)) {
+                return new LoginUnsuccessfulResponse(ThingStatusDetail.CONFIGURATION_ERROR,
+                        "Access code cannot be blank");
+            } else {
+                final AccessCheckResult result = sonyAuth.requestAccess(transport,
+                        StringUtils.equalsIgnoreCase(DialConstants.ACCESSCODE_RQST, accessCode) ? null : accessCode);
+                if (result == AccessCheckResult.OK) {
+                    // GOOD!
+                } else {
+                    return new LoginUnsuccessfulResponse(ThingStatusDetail.CONFIGURATION_ERROR, result.getMsg());
+                }
+            }
+        }
+
+        transport.setOption(TransportOptionAutoAuth.TRUE);
+        return null;
     }
 
     /**
@@ -118,8 +184,8 @@ class DialProtocol<T extends ThingCallback<String>> implements AutoCloseable {
         if (urr == null) {
             logger.debug("Could not combine {} and {}", dialClient.getAppUrl(), applId);
         } else {
-            final HttpResponse resp = start ? httpRequest.sendPostXmlCommand(urr.toString(), "")
-                    : httpRequest.sendDeleteCommand(urr.toString(), "");
+            final HttpResponse resp = start ? transport.executePostXml(urr.toString(), "")
+                    : transport.executeDelete(urr.toString());
             if (resp.getHttpCode() != HttpStatus.SERVICE_UNAVAILABLE_503) {
                 logger.debug("Cannot start {}, another application is currently running.", applId);
             } else if (resp.getHttpCode() != HttpStatus.CREATED_201) {
@@ -143,8 +209,13 @@ class DialProtocol<T extends ThingCallback<String>> implements AutoCloseable {
             if (urr == null) {
                 logger.debug("Could not combine {} and {}", dialClient.getAppUrl(), applId);
             } else {
-                final DialAppState state = DialAppState.get(urr);
-                callback.stateChanged(channelId, state != null && state.isRunning() ? OnOffType.ON : OnOffType.OFF);
+                final HttpResponse resp = transport.executeGet(urr.toExternalForm());
+                if (resp.getHttpCode() != HttpStatus.OK_200) {
+                    throw resp.createException();
+                }
+
+                final DialAppState state = DialAppState.get(resp.getContent());
+                callback.stateChanged(channelId, state.isRunning() ? OnOffType.ON : OnOffType.OFF);
             }
         } catch (IOException e) {
             logger.debug("Error refreshing the 'state' of the application: {}", e.getMessage());
@@ -161,7 +232,7 @@ class DialProtocol<T extends ThingCallback<String>> implements AutoCloseable {
         Validate.notEmpty(channelId, "channelId cannot be empty");
         Validate.notEmpty(applId, "applId cannot be empty");
 
-        final DialApp app = dialClient.getDialApp(applId);
+        final DialApp app = getDialApp(applId);
         callback.stateChanged(channelId, new StringType(app == null ? "(Unknown)" : app.getName()));
     }
 
@@ -175,12 +246,12 @@ class DialProtocol<T extends ThingCallback<String>> implements AutoCloseable {
         Validate.notEmpty(channelId, "channelId cannot be empty");
         Validate.notEmpty(applId, "applId cannot be empty");
 
-        final DialApp app = dialClient.getDialApp(applId);
+        final DialApp app = getDialApp(applId);
         final String url = app == null ? null : app.getIconUrl();
 
         byte[] iconData = null;
         if (url != null && StringUtils.isNotEmpty(url)) {
-            final HttpResponse resp = httpRequest.sendGetCommand(url);
+            final HttpResponse resp = transport.executeGet(url);
             if (resp.getHttpCode() == HttpStatus.OK_200) {
                 iconData = resp.getContentAsBytes();
             }
@@ -194,16 +265,58 @@ class DialProtocol<T extends ThingCallback<String>> implements AutoCloseable {
     }
 
     /**
+     * Helper method to get the dial application for the given application id
+     * @param appId a non-null, non-empty appication id
+     * @return the DialApp for the applId or null if not found
+     */
+    private @Nullable DialApp getDialApp(String appId) {
+        Validate.notEmpty(appId, "appId cannot be empty");
+        final Map<String, DialApp> apps = getDialApps();
+        return apps.get(appId);
+    }
+
+    /**
      * Returns the list of dial apps on the sony device
      *
      * @return a non-null, maybe empty list of dial apps
      */
-    public List<DialApp> getDialApps() {
-        return dialClient.getDialApps();
+    public Map<String, DialApp> getDialApps() {
+        final Map<String, DialApp> apps = new HashMap<>();
+        for (DialDeviceInfo info : dialClient.getDeviceInfos()) {
+            final String appsListUrl = info.getAppsListUrl();
+            if (appsListUrl != null && StringUtils.isNotBlank(appsListUrl)) {
+                final HttpResponse appsResp = getApplicationList(appsListUrl);
+                if (appsResp.getHttpCode() == HttpStatus.OK_200) {
+                    final DialService service = DialService.get(appsResp.getContent());
+                    if (service != null) {
+                        service.getApps().forEach(a -> {
+                            final String id = a.getId();
+                            if (id != null) {
+                                apps.putIfAbsent(id, a);
+                            }
+                        });
+                    }
+                } else {
+                    logger.debug("Exception getting dial service from {}: {}", appsListUrl, appsResp);
+                }
+            }
+        }
+        return Collections.unmodifiableMap(apps);
+    }
+
+    /**
+     * Gets the application list for a given url
+     * @param appsListUrl a non-null, non-empty application list url
+     * @return the http response for the call
+     */
+    private HttpResponse getApplicationList(String appsListUrl) {
+        Validate.notEmpty(appsListUrl, "appsListUrl cannot be empty");
+        return transport.executeGet(appsListUrl,
+                new TransportOptionHeader("Content-Type", "text/xml; charset=\"utf-8\""));
     }
 
     @Override
     public void close() {
-        httpRequest.close();
+        transport.close();
     }
 }

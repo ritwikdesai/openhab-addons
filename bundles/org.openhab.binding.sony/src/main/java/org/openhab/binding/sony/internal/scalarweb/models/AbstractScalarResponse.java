@@ -63,7 +63,8 @@ public abstract class AbstractScalarResponse {
         } catch (NoSuchMethodException e) {
             final JsonArray localResults = getPayload();
             if (isBlank(localResults)) {
-                return null;
+                throw new IllegalArgumentException(
+                    "Cannot construct ScalarWebResult for " + clazz + " with results: " + localResults);
             } else if (localResults.size() == 1) {
                 JsonElement elm = localResults.get(0);
                 if (elm.isJsonArray()) {

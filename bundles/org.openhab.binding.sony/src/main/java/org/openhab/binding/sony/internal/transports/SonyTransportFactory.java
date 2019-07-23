@@ -10,9 +10,10 @@
  *
  * SPDX-License-Identifier: EPL-2.0
  */
-package org.openhab.binding.sony.internal.scalarweb.transports;
+package org.openhab.binding.sony.internal.transports;
 
 import java.io.IOException;
+import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
@@ -23,7 +24,7 @@ import java.util.concurrent.TimeoutException;
 import org.eclipse.jdt.annotation.NonNullByDefault;
 import org.eclipse.jdt.annotation.Nullable;
 import org.eclipse.jetty.websocket.client.WebSocketClient;
-import org.openhab.binding.sony.internal.scalarweb.models.ScalarWebRequest;
+import org.openhab.binding.sony.internal.scalarweb.gson.GsonUtilities;
 import org.openhab.binding.sony.internal.scalarweb.models.api.ServiceProtocol;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -53,7 +54,7 @@ public class SonyTransportFactory {
         this.scheduler = scheduler;
     }
 
-    public @Nullable SonyTransport<ScalarWebRequest> getSonyTransport(ServiceProtocol serviceProtocol) {
+    public @Nullable SonyTransport getSonyTransport(ServiceProtocol serviceProtocol) {
         String protocol;
         if (serviceProtocol.hasWebsocketProtocol()) {
             protocol = SonyTransport.WEBSOCKET;
@@ -63,22 +64,22 @@ public class SonyTransportFactory {
             protocol = SonyTransport.AUTO;
         }
         final String serviceName = serviceProtocol.getServiceName();
-        final SonyTransport<ScalarWebRequest> transport = getSonyTransport(serviceName, protocol);
+        final SonyTransport transport = getSonyTransport(serviceName, protocol);
         return transport == null ? getSonyTransport(serviceName, SonyTransport.AUTO) : transport;
     }
 
-    public @Nullable SonyTransport<ScalarWebRequest> getSonyTransport(String serviceName) {
+    public @Nullable SonyTransport getSonyTransport(String serviceName) {
         return getSonyTransport(serviceName, SonyTransport.AUTO);
     }
 
-    public @Nullable SonyTransport<ScalarWebRequest> getSonyTransport(String serviceName, String protocol) {
+    public @Nullable SonyTransport getSonyTransport(String serviceName, String protocol) {
         switch (protocol) {
             case SonyTransport.AUTO:
                 final SonyWebSocketTransport wst = createWebSocketTransport(serviceName);
-                return wst == null ? createHttpTransport(serviceName) : wst;
+                return wst == null ? createServiceHttpTransport(serviceName) : wst;
 
             case SonyTransport.HTTP:
-                return createHttpTransport(serviceName);
+                return createServiceHttpTransport(serviceName);
 
             case SonyTransport.WEBSOCKET:
                 return createWebSocketTransport(serviceName);
@@ -110,11 +111,20 @@ public class SonyTransportFactory {
         }
     }
 
-    private SonyHttpTransport createHttpTransport(String serviceName) {
+    private SonyHttpTransport createServiceHttpTransport(String serviceName) {
         final String base = baseUrl.toString();
         final String baseUrlString = base + (base.endsWith("/") ? "" : "/")
                 + (serviceName.startsWith("/") ? serviceName.substring(1) : serviceName);
 
-        return new SonyHttpTransport(baseUrlString, gson);
+        try {
+            return new SonyHttpTransport(baseUrlString, gson);
+        } catch (MalformedURLException e) {
+            logger.debug("Exception occurred creating transport: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    public static SonyHttpTransport createHttpTransport(String baseUrl) throws MalformedURLException {
+        return new SonyHttpTransport(baseUrl, GsonUtilities.getDefaultGson());
     }
 }

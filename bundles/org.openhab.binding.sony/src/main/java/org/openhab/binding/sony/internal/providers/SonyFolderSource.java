@@ -200,7 +200,12 @@ public class SonyFolderSource implements SonySource {
                                 logger.debug("File deletion occurred, reloading ALL definitions");
                                 readFiles();
                             } else {
-                                readFile(((Path) event.context()).toAbsolutePath().toString());
+                                final Path eventPath = (Path) event.context();
+                                if (eventPath == null) {
+                                    logger.debug("Watch notification without an path in the context: {}", event);
+                                } else {
+                                    readFile(eventPath.toAbsolutePath().toString());
+                                }
                             }
                         }
                         key.reset();

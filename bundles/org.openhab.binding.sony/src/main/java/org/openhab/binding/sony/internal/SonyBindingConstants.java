@@ -39,4 +39,8 @@ public class SonyBindingConstants {
     public static final String DIAL_THING_TYPE_PREFIX = "dial";
     public static final String IRCC_THING_TYPE_PREFIX = "ircc";
     public static final String SCALAR_THING_TYPE_PREFIX = "scalar";
+
+    
+    // The timeout (in seconds) to wait on a response
+    public static final Integer RSP_WAIT_TIMEOUTSECONDS = 10;
 }

@@ -21,9 +21,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 
 import org.apache.commons.lang.StringUtils;
@@ -31,19 +28,15 @@ import org.apache.commons.lang.Validate;
 import org.eclipse.jdt.annotation.NonNullByDefault;
 import org.eclipse.jdt.annotation.Nullable;
 import org.eclipse.jetty.http.HttpStatus;
-import org.openhab.binding.sony.internal.net.Header;
-import org.openhab.binding.sony.internal.net.NetUtil;
 import org.openhab.binding.sony.internal.scalarweb.ScalarUtilities;
-import org.openhab.binding.sony.internal.scalarweb.ScalarWebConstants;
-import org.openhab.binding.sony.internal.scalarweb.models.api.ActRegisterId;
-import org.openhab.binding.sony.internal.scalarweb.models.api.ActRegisterOptions;
 import org.openhab.binding.sony.internal.scalarweb.models.api.MethodTypes;
 import org.openhab.binding.sony.internal.scalarweb.models.api.ServiceProtocol;
 import org.openhab.binding.sony.internal.scalarweb.models.api.SupportedApi;
 import org.openhab.binding.sony.internal.scalarweb.models.api.SupportedApiInfo;
 import org.openhab.binding.sony.internal.scalarweb.models.api.SupportedApiVersionInfo;
-import org.openhab.binding.sony.internal.scalarweb.transports.SonyTransport;
-import org.openhab.binding.sony.internal.scalarweb.transports.SonyTransportFactory;
+import org.openhab.binding.sony.internal.transports.SonyTransport;
+import org.openhab.binding.sony.internal.transports.SonyTransportFactory;
+import org.openhab.binding.sony.internal.transports.TransportOption;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -81,7 +74,7 @@ public class ScalarWebService implements AutoCloseable {
     private final SonyTransportFactory transportFactory;
 
     /** Transport used for communication */
-    private final SonyTransport<ScalarWebRequest> transport;
+    private final SonyTransport transport;
 
     /** The API supported by this service */
     private final SupportedApi supportedApi;
@@ -92,14 +85,15 @@ public class ScalarWebService implements AutoCloseable {
     /**
      * Instantiates a new scalar web service.
      *
-     * @param serviceName  the non-null, non-empty service name to use
+     * @param transportFactory  the non-null transport factory to use
+     * @param serviceProtocol  the non-null service protocol to use
      * @param version      the non-null, non-empty service version
      * @param supportedApi the non-null supported api
-     * @param transport    the non-null transport to use
-     * @throws IOException Signals that an I/O exception has occurred.
      */
     public ScalarWebService(SonyTransportFactory transportFactory, ServiceProtocol serviceProtocol, String version,
             SupportedApi supportedApi) {
+        Objects.requireNonNull(transportFactory, "transportFactory cannot be null");
+        Objects.requireNonNull(serviceProtocol, "serviceProtocol cannot be null");
         Validate.notEmpty(version, "version cannot be empty");
         Objects.requireNonNull(supportedApi, "supportedApi cannot be null");
 
@@ -108,13 +102,17 @@ public class ScalarWebService implements AutoCloseable {
         this.version = version;
         this.supportedApi = supportedApi;
 
-        final SonyTransport<ScalarWebRequest> transport = transportFactory.getSonyTransport(serviceProtocol);
+        final SonyTransport transport = transportFactory.getSonyTransport(serviceProtocol);
         if (transport == null) {
             throw new IllegalArgumentException("No transport found for " + serviceProtocol);
         }
         this.transport = transport;
     }
 
+    /**
+     * Retrieves the methods for this service
+     * @return a non-null, possibly empty list of {@link ScalarWebMethod}
+     */
     public List<ScalarWebMethod> getMethods() {
         final List<ScalarWebMethod> methods = new ArrayList<>();
         try {
@@ -130,7 +128,7 @@ public class ScalarWebService implements AutoCloseable {
                 methods.addAll(mtdResults.getMethods());
             }
         } catch (IOException e) {
-            if (StringUtils.contains(e.getMessage(), "404")) {
+            if (StringUtils.contains(e.getMessage(), String.valueOf(HttpStatus.NOT_FOUND_404))) {
                 logger.debug("Could not retrieve methods - missing method (or service unavilable): {}", e.getMessage());
             } else {
                 logger.debug("Could not retrieve methods: {}", e.getMessage(), e);
@@ -151,6 +149,10 @@ public class ScalarWebService implements AutoCloseable {
         return methods;
     }
 
+    /**
+     * Gets the list of notifications for the service
+     * @return a non-null, possibly empty list of {@link ScalarWebMethod}
+     */
     public List<ScalarWebMethod> getNotifications() {
         final List<ScalarWebMethod> notifications = new ArrayList<>();
         // add in any supported api that has no match above (shouldn't really be any but we are being complete)
@@ -223,7 +225,7 @@ public class ScalarWebService implements AutoCloseable {
      *
      * @return the non-null sony transport
      */
-    public SonyTransport<ScalarWebRequest> getTransport() {
+    public SonyTransport getTransport() {
         return transport;
     }
 
@@ -263,67 +265,41 @@ public class ScalarWebService implements AutoCloseable {
     }
 
     /**
-     * Execute the specified json request with the specified HTTP headers
+     * Execute the specified request with the specified options
      *
-     * @param jsonRequest the json request
-     * @param headers     the headers
+     * @param request the non-null request to execute
+     * @param options the possibly not specified options to use the execution with
      * @return the scalar web result
      */
-    public ScalarWebResult execute(ScalarWebRequest request) {
+    public ScalarWebResult execute(ScalarWebRequest request, TransportOption... options) {
+        Objects.requireNonNull(request, "request cannot be null");
+
         final Set<String> protocols = supportedApi.getProtocols(request.getMethod(), request.getVersion());
-        try {
-            if (protocols.contains(transport.getProtocolType())) {
-                return transport.execute(request).get(ScalarWebConstants.RSP_WAIT_TIMEOUTSECONDS, TimeUnit.SECONDS);
-            } else {
-                final ServiceProtocol serviceProtocol = new ServiceProtocol(serviceName, protocols);
-                try (final SonyTransport<ScalarWebRequest> mthdTransport = transportFactory
-                        .getSonyTransport(serviceProtocol)) {
-                    if (mthdTransport == null) {
-                        logger.debug("No transport for {} with protocols: {}", request, protocols);
-                        return ScalarUtilities.createErrorResult(HttpStatus.INTERNAL_SERVER_ERROR_500,
-                                "No transport for " + request + " with protocols: " + protocols);
-                    } else {
-                        logger.debug("Execution of {} is using a different protocol {} than the service {}", request,
-                                mthdTransport.getProtocolType(), transport.getProtocolType());
-                        return mthdTransport.execute(request).get(ScalarWebConstants.RSP_WAIT_TIMEOUTSECONDS,
-                                TimeUnit.SECONDS);
-                    }
+        if (protocols.contains(transport.getProtocolType())) {
+            return transport.execute(request, options);
+        } else {
+            final ServiceProtocol serviceProtocol = new ServiceProtocol(serviceName, protocols);
+            try (final SonyTransport mthdTransport = transportFactory.getSonyTransport(serviceProtocol)) {
+                if (mthdTransport == null) {
+                    logger.debug("No transport for {} with protocols: {}", request, protocols);
+                    return ScalarUtilities.createErrorResult(HttpStatus.INTERNAL_SERVER_ERROR_500,
+                            "No transport for " + request + " with protocols: " + protocols);
+                } else {
+                    logger.debug("Execution of {} is using a different protocol {} than the service {}", request,
+                            mthdTransport.getProtocolType(), transport.getProtocolType());
+                    return mthdTransport.execute(request, options);
                 }
             }
-        } catch (InterruptedException | ExecutionException | TimeoutException e) {
-            logger.debug("Execution of {} resulted in an exception: {}", request, e.getMessage(), e);
-            return ScalarUtilities.createErrorResult(HttpStatus.INTERNAL_SERVER_ERROR_500, e.getMessage());
         }
     }
 
     /**
-     * Helper method to execute an ActRegister to register the system
-     *
-     * @param accessCode the access code to use (or null to initiate the first step of ActRegister)
-     * @return the scalar web result
+     * Returns the label for a given service name
+     * @param serviceName a non-null, non-empty service name
+     * @return the label for the service
      */
-    public ScalarWebResult actRegister(@Nullable Integer accessCode) {
-        final String actVersion = getVersion(ScalarWebMethod.ACTREGISTER);
-        if (actVersion == null) {
-            return ScalarWebResult.createNotImplemented(ScalarWebMethod.ACTREGISTER);
-        }
-
-        if (accessCode == null) {
-            return execute(ScalarWebMethod.ACTREGISTER, new ActRegisterId(), new Object[] { new ActRegisterOptions() });
-        } else {
-            final Header authHeader = NetUtil.createAuthHeader(accessCode);
-            try {
-                getTransport().addOption(SonyTransport.OPTION_HEADER, authHeader);
-                return execute(new ScalarWebRequest(currId++, ScalarWebMethod.ACTREGISTER, actVersion,
-                        new ActRegisterId(), new Object[] { new ActRegisterOptions() }));
-
-            } finally {
-                getTransport().removeOption(SonyTransport.OPTION_HEADER, authHeader);
-            }
-        }
-    }
-
-    public static String labelFor(String serviceName) {
+    private static String labelFor(String serviceName) {
+        Validate.notEmpty(serviceName, "serviceName cannot be empty");
         switch (serviceName) {
             case ACCESSCONTROL:
                 return "Access Control";
@@ -352,7 +328,11 @@ public class ScalarWebService implements AutoCloseable {
         }
     }
 
-    public static Map<String, String> getServiceMap() {
+    /**
+     * Returns a map of service names to their label
+     * @return a non-null, non-empty map of service names to service labels
+     */
+    public static Map<String, String> getServiceLabels() {
         return Collections.unmodifiableMap(new HashMap<String, String>() {
             private static final long serialVersionUID = 5934100497468165317L;
             {

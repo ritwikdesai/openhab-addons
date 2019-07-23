@@ -22,9 +22,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.TimeZone;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 
 import org.apache.commons.lang.StringUtils;
 import org.apache.commons.lang.Validate;
@@ -42,20 +39,15 @@ import org.eclipse.smarthome.core.types.Command;
 import org.openhab.binding.sony.internal.SonyUtil;
 import org.openhab.binding.sony.internal.ThingCallback;
 import org.openhab.binding.sony.internal.ircc.models.IrccClient;
-import org.openhab.binding.sony.internal.net.HttpRequest;
 import org.openhab.binding.sony.internal.net.HttpResponse;
 import org.openhab.binding.sony.internal.net.HttpResponse.SOAPError;
-import org.openhab.binding.sony.internal.net.NetUtil;
 import org.openhab.binding.sony.internal.scalarweb.ScalarWebChannel;
 import org.openhab.binding.sony.internal.scalarweb.ScalarWebChannelDescriptor;
 import org.openhab.binding.sony.internal.scalarweb.ScalarWebChannelTracker;
-import org.openhab.binding.sony.internal.scalarweb.ScalarWebConfig;
-import org.openhab.binding.sony.internal.scalarweb.ScalarWebConstants;
 import org.openhab.binding.sony.internal.scalarweb.ScalarWebContext;
 import org.openhab.binding.sony.internal.scalarweb.VersionUtilities;
 import org.openhab.binding.sony.internal.scalarweb.models.ScalarWebEvent;
 import org.openhab.binding.sony.internal.scalarweb.models.ScalarWebMethod;
-import org.openhab.binding.sony.internal.scalarweb.models.ScalarWebResult;
 import org.openhab.binding.sony.internal.scalarweb.models.ScalarWebService;
 import org.openhab.binding.sony.internal.scalarweb.models.api.CurrentTime;
 import org.openhab.binding.sony.internal.scalarweb.models.api.Language;
@@ -68,7 +60,8 @@ import org.openhab.binding.sony.internal.scalarweb.models.api.PowerStatusResult_
 import org.openhab.binding.sony.internal.scalarweb.models.api.PowerStatusResult_1_1;
 import org.openhab.binding.sony.internal.scalarweb.models.api.SystemInformation;
 import org.openhab.binding.sony.internal.scalarweb.models.api.WolMode;
-import org.openhab.binding.sony.internal.scalarweb.transports.SonyIrccTransport;
+import org.openhab.binding.sony.internal.transports.SonyTransport;
+import org.openhab.binding.sony.internal.transports.SonyTransportFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -95,9 +88,6 @@ class ScalarWebSystemProtocol<T extends ThingCallback<String>> extends AbstractS
     private static final String SYSCMD = "sysCmd";
     private static final String POSTALCODE = "postalcode";
 
-    /** The http requestor */
-    private final HttpRequest httpRequest;
-
     /** The url for the IRCC service */
     private final @Nullable String irccUrl;
 
@@ -115,13 +105,6 @@ class ScalarWebSystemProtocol<T extends ThingCallback<String>> extends AbstractS
         super(factory, context, service, callback);
 
         this.irccUrl = irccUrl;
-
-        httpRequest = NetUtil.createHttpRequest();
-
-        final Integer accessCodeNbr = context.getConfig().getAccessCodeNbr();
-        if (accessCodeNbr != null) {
-            httpRequest.addHeader(NetUtil.createAccessCodeHeader(accessCodeNbr));
-        }
 
         enableNotifications(ScalarWebEvent.NOTIFYPOWERSTATUS);
     }
@@ -510,21 +493,7 @@ class ScalarWebSystemProtocol<T extends ThingCallback<String>> extends AbstractS
      */
     private void setPowerStatus(boolean status) {
         if (status) {
-            final ScalarWebConfig config = getContext().getConfig();
-            final String deviceIpAddress = config.getDeviceIpAddress();
-            final String deviceMacAddress = config.getDeviceMacAddress();
-            if (deviceIpAddress != null && deviceMacAddress != null && StringUtils.isNotBlank(deviceIpAddress)
-                    && StringUtils.isNotBlank(deviceMacAddress)) {
-                try {
-                    NetUtil.sendWol(deviceIpAddress, deviceMacAddress);
-                    logger.debug("WOL packet sent to {}", config.getDeviceMacAddress());
-                } catch (IOException e) {
-                    logger.warn("Exception occurred sending WOL packet to {}: {}", config.getDeviceMacAddress(), e);
-                }
-            } else {
-                logger.debug(
-                        "WOL packet is not supported - specify the IP address and mac address in config if you want a WOL packet sent");
-            }
+            SonyUtil.sendWakeOnLan(logger, getContext().getConfig().getDeviceIpAddress(), getContext().getConfig().getDeviceMacAddress());
         }
 
         handleExecute(ScalarWebMethod.SETPOWERSTATUS, version -> {
@@ -575,7 +544,8 @@ class ScalarWebSystemProtocol<T extends ThingCallback<String>> extends AbstractS
         if (localIrccUrl == null || StringUtils.isEmpty(localIrccUrl)) {
             logger.debug("IRCC URL was not specified in configuration");
         } else {
-            try (final IrccClient irccClient = new IrccClient(localIrccUrl)) {
+            try {
+                final IrccClient irccClient = new IrccClient(localIrccUrl);
                 final ScalarWebContext context = getContext();
                 String localCmd = cmd;
 
@@ -608,13 +578,11 @@ class ScalarWebSystemProtocol<T extends ThingCallback<String>> extends AbstractS
                     return;
                 }
 
+                // Always use an http transport to execute soap
                 HttpResponse httpResponse;
-                try (final SonyIrccTransport ircc = new SonyIrccTransport(irccClient, httpRequest)) {
-                    final ScalarWebResult result = ircc.execute(localCmd)
-                            .get(ScalarWebConstants.RSP_WAIT_TIMEOUTSECONDS, TimeUnit.SECONDS);
-                    httpResponse = result.getHttpResponse();
-                } catch (InterruptedException | ExecutionException | TimeoutException e) {
-                    httpResponse = new HttpResponse(HttpStatus.INTERNAL_SERVER_ERROR_500, e.getMessage());
+                try (final SonyTransport transport = SonyTransportFactory
+                        .createHttpTransport(irccClient.getBaseUrl().toExternalForm())) {
+                    httpResponse = irccClient.executeSoap(transport, localCmd);
                 }
 
                 switch (httpResponse.getHttpCode()) {
@@ -623,11 +591,11 @@ class ScalarWebSystemProtocol<T extends ThingCallback<String>> extends AbstractS
                         break;
 
                     case HttpStatus.SERVICE_UNAVAILABLE_503:
-                        logger.debug("Scalar service is unavailable (power off?)");
+                        logger.debug("IRCC service is unavailable (power off?)");
                         break;
 
                     case HttpStatus.FORBIDDEN_403:
-                        logger.debug("Scalar methods have been forbidden on service {} ({}): {}",
+                        logger.debug("IRCC methods have been forbidden on service {} ({}): {}",
                                 service.getServiceName(), irccClient.getBaseUrl(), httpResponse);
                         break;
 
@@ -635,7 +603,7 @@ class ScalarWebSystemProtocol<T extends ThingCallback<String>> extends AbstractS
                         final SOAPError soapError = httpResponse.getSOAPError();
                         if (soapError == null) {
                             final IOException e = httpResponse.createException();
-                            logger.debug("Communication error for Scalar method on service {} ({}): {}",
+                            logger.debug("Communication error for IRCC method on service {} ({}): {}",
                                     service.getServiceName(), irccClient.getBaseUrl(), e.getMessage(), e);
                             callback.statusChanged(ThingStatus.OFFLINE, ThingStatusDetail.COMMUNICATION_ERROR,
                                     e.getMessage());
@@ -648,7 +616,7 @@ class ScalarWebSystemProtocol<T extends ThingCallback<String>> extends AbstractS
 
                     default:
                         final IOException e = httpResponse.createException();
-                        logger.debug("Communication error for Scalar method on service {} ({}): {}",
+                        logger.debug("Communication error for IRCC method on service {} ({}): {}",
                                 service.getServiceName(), irccClient.getBaseUrl(), e.getMessage(), e);
                         callback.statusChanged(ThingStatus.OFFLINE, ThingStatusDetail.COMMUNICATION_ERROR,
                                 e.getMessage());
@@ -692,6 +660,5 @@ class ScalarWebSystemProtocol<T extends ThingCallback<String>> extends AbstractS
     @Override
     public void close() {
         super.close();
-        httpRequest.close();
     }
 }

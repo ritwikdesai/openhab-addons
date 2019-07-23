@@ -16,6 +16,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
+import org.apache.commons.lang.Validate;
 import org.eclipse.jdt.annotation.NonNullByDefault;
 import org.eclipse.jdt.annotation.Nullable;
 
@@ -66,17 +67,27 @@ import com.thoughtworks.xstream.annotations.XStreamImplicit;
  */
 @NonNullByDefault
 @XStreamAlias("service")
-class DialService {
-    /** The list of {@link DialApp} */
-    @XStreamImplicit(itemFieldName = "app")
-    private @Nullable List<DialApp> apps;
+public class DialService {
+  /** The list of {@link DialApp} */
+  @XStreamImplicit(itemFieldName = "app")
+  private @Nullable List<DialApp> apps;
 
-    /**
-     * Returns the list of {@link DialApp} for the service
-     *
-     * @return a non-null, possibly empty list of {@link DialApp}
-     */
-    public List<DialApp> getApps() {
-        return Collections.unmodifiableList(apps == null ? new ArrayList<>() : apps);
-    }
+  /**
+   * Creates a DialServer from the given XML or null if the representation is incorrect
+   * @param xml a non-null, non-empty XML representation
+   * @return A DialService or null if the XML is not valid
+   */
+  public static @Nullable DialService get(String xml) {
+    Validate.notEmpty(xml);
+    return DialXmlReader.SERVICE.fromXML(xml);
+  }
+
+  /**
+   * Returns the list of {@link DialApp} for the service
+   *
+   * @return a non-null, possibly empty list of {@link DialApp}
+   */
+  public List<DialApp> getApps() {
+    return Collections.unmodifiableList(apps == null ? new ArrayList<>() : apps);
+  }
 }

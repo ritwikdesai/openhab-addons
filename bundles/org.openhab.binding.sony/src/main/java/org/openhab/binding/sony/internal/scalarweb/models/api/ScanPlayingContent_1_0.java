@@ -31,4 +31,12 @@ public class ScanPlayingContent_1_0 {
         this.direction = fwd ? DIR_FWD : DIR_BWD;
         this.output = output;
     }
+
+    public String getDirection() {
+        return direction;
+    }
+
+    public String getOutput() {
+        return output;
+    }
 }

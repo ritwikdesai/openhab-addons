@@ -35,21 +35,21 @@
 
 <script lang="ts">
 import { mapState } from 'vuex';
-import Vue from 'vue'
+import Vue from 'vue';
 
 export default Vue.extend({
       computed: {
     ...mapState('type', ['typeDefinition']),
   },
-})
+});
 </script>
 
 <style scoped>
-.overview {
-    float: left;
-    width: 30em;
-    margin-right: 2em;
-}
+    .overview {
+        float: left;
+        width: 30em;
+        margin-right: 2em;
+    }
     table .label {
         font-weight: bold;
     }

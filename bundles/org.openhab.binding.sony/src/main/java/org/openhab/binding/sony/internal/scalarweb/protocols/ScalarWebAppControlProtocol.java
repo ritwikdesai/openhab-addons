@@ -70,7 +70,7 @@ class ScalarWebAppControlProtocol<T extends ThingCallback<String>> extends Abstr
 
     // The intervals used for refresh
     private static final int APPLISTINTERVAL = 60000;
-    //private static final int ACTIVEAPPINTERVAL = 10000;
+    // private static final int ACTIVEAPPINTERVAL = 10000;
 
     /** The encryption key to use */
     private final @Nullable String pubKey;
@@ -85,10 +85,10 @@ class ScalarWebAppControlProtocol<T extends ThingCallback<String>> extends Abstr
     private final List<ApplicationList> apps = new CopyOnWriteArrayList<ApplicationList>();
 
     /** The lock used to access activeApp */
-    //private final Lock activeAppLock = new ReentrantLock();
+    // private final Lock activeAppLock = new ReentrantLock();
 
     /** The last time the activeApp was accessed */
-    //private long activeAppLastTime = 0;
+    // private long activeAppLastTime = 0;
 
     /** The active app. */
     // private @Nullable ActiveApp activeApp = null;

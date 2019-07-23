@@ -30,4 +30,12 @@ public class PresetBroadcastStation {
         this.uri = uri;
         this.frequency = null;
     }
+
+    public String getUri() {
+        return uri;
+    }
+
+    public @Nullable String getFrequency() {
+        return frequency;
+    }
 }

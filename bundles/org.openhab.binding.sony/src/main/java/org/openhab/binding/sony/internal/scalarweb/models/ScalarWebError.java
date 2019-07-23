@@ -39,6 +39,7 @@ public class ScalarWebError {
     public static final int NOTIMPLEMENTED = 12;
     public static final int UNSUPPORTEDVERSION = 14;
     public static final int UNSUPPORTEDOPERATION = 15;
+    public static final int FORBIDDEN = 403;
     public static final int FAILEDTOLAUNCH = 41401;
 
     public static final int REQUESTRETRY = 40000;

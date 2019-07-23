@@ -12,11 +12,6 @@
  */
 package org.openhab.binding.sony.internal.dial.models;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Objects;
-
 import org.eclipse.jdt.annotation.NonNullByDefault;
 import org.eclipse.jdt.annotation.Nullable;
 
@@ -39,7 +34,7 @@ import com.thoughtworks.xstream.annotations.XStreamAlias;
  */
 @NonNullByDefault
 @XStreamAlias("X_DIALEX_DeviceInfo")
-class DialDeviceInfo {
+public class DialDeviceInfo {
 
     /** The apps list url. */
     @XStreamAlias("X_DIALEX_AppsListURL")
@@ -53,35 +48,17 @@ class DialDeviceInfo {
     @XStreamAlias("X_DIALEX_DeviceType")
     private @Nullable String deviceType;
 
-    /** The list of {@link DialApp} */
-    private @Nullable List<DialApp> apps;
-
     /**
      * Private constructor to construct the object - only called from the {@link #withApps(List)}
      *
      * @param appsListUrl the possibly null, possibly empty application list URL
      * @param deviceId    the possibly null, possibly empty application device ID
      * @param deviceType  the possibly null, possibly empty application device type
-     * @param apps        the non-null, possibly empty list of {@link DialApp}
      */
-    private DialDeviceInfo(@Nullable String appsListUrl, @Nullable String deviceId, @Nullable String deviceType,
-            List<DialApp> apps) {
-        Objects.requireNonNull(apps, "apps cannot be null");
+    private DialDeviceInfo(@Nullable String appsListUrl, @Nullable String deviceId, @Nullable String deviceType) {
         this.appsListUrl = appsListUrl;
         this.deviceId = deviceId;
         this.deviceType = deviceType;
-        this.apps = apps;
-    }
-
-    /**
-     * Constructs a new {@link DialDeviceInfo} with the new list of {@link DialApp}
-     *
-     * @param apps a non-null, possibly empty list of {@link DialApp}
-     * @return a non-null {@link DialDeviceInfo}
-     */
-    DialDeviceInfo withApps(List<DialApp> apps) {
-        Objects.requireNonNull(apps, "apps cannot be null");
-        return new DialDeviceInfo(appsListUrl, deviceId, deviceType, apps);
     }
 
     /**
@@ -89,8 +66,7 @@ class DialDeviceInfo {
      *
      * @return a possibly null, possibly empty application list URL
      */
-    @Nullable
-    String getAppsListUrl() {
+    public @Nullable String getAppsListUrl() {
         return appsListUrl;
     }
 
@@ -111,14 +87,5 @@ class DialDeviceInfo {
      */
     public @Nullable String getDeviceType() {
         return deviceType;
-    }
-
-    /**
-     * Gets the list of {@link DialApp}
-     *
-     * @return the non-null, possibly empty list of {@link DialApp}
-     */
-    public List<DialApp> getDialApps() {
-        return Collections.unmodifiableList(apps == null ? new ArrayList<>() : apps);
     }
 }

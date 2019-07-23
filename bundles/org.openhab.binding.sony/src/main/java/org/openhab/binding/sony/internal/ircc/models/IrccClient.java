@@ -16,6 +16,7 @@ import java.io.IOException;
 import java.net.URL;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 
 import org.apache.commons.lang.NotImplementedException;
 import org.apache.commons.lang.StringUtils;
@@ -23,9 +24,11 @@ import org.apache.commons.lang.Validate;
 import org.eclipse.jdt.annotation.NonNullByDefault;
 import org.eclipse.jdt.annotation.Nullable;
 import org.eclipse.jetty.http.HttpStatus;
-import org.openhab.binding.sony.internal.net.HttpRequest;
 import org.openhab.binding.sony.internal.net.HttpResponse;
-import org.openhab.binding.sony.internal.net.NetUtil;
+import org.openhab.binding.sony.internal.scalarweb.gson.GsonUtilities;
+import org.openhab.binding.sony.internal.transports.SonyHttpTransport;
+import org.openhab.binding.sony.internal.transports.SonyTransport;
+import org.openhab.binding.sony.internal.transports.TransportOptionHeader;
 import org.openhab.binding.sony.internal.upnp.models.UpnpScpd;
 import org.openhab.binding.sony.internal.upnp.models.UpnpService;
 import org.openhab.binding.sony.internal.upnp.models.UpnpXmlReader;
@@ -39,7 +42,7 @@ import org.slf4j.LoggerFactory;
  * @author Tim Roberts - Initial contribution
  */
 @NonNullByDefault
-public class IrccClient implements AutoCloseable {
+public class IrccClient {
 
     /** The logger used by the client */
     private Logger logger = LoggerFactory.getLogger(IrccClient.class);
@@ -89,9 +92,6 @@ public class IrccClient implements AutoCloseable {
     /** The remote commands supported by the IRCC device */
     private final IrccRemoteCommands remoteCommands;
 
-    /** The http request object used to communicate to the IRCC device */
-    private HttpRequest requestor;
-
     /** The IRCC device definition */
     private final IrccDevice irccDevice;
 
@@ -110,122 +110,124 @@ public class IrccClient implements AutoCloseable {
     public IrccClient(String irccUrl) throws IOException {
         Validate.notEmpty(irccUrl, "irccUrl cannot be empty");
 
-        requestor = NetUtil.createHttpRequest();
-
-        final HttpResponse resp = requestor.sendGetCommand(irccUrl);
-        if (resp.getHttpCode() != HttpStatus.OK_200) {
-            throw resp.createException();
-        }
-
-        this.baseUrl = new URL(irccUrl);
-
-        final String irccResponse = resp.getContent();
-        final IrccRoot irccRoot = IrccXmlReader.ROOT.fromXML(irccResponse);
-        if (irccRoot == null) {
-            throw new IOException("IRCC response (" + irccUrl + ") was not valid: " + irccResponse);
-        }
-
-        final IrccDevice irccDevice = irccRoot.getDevice();
-        if (irccDevice == null) {
-            throw new IOException("IRCC response (" + irccUrl + ") didn't contain an IRCC device");
-        }
-        this.irccDevice = irccDevice;
-
-        for (UpnpService service : irccDevice.getServices()) {
-            final String serviceId = service.getServiceId();
-
-            if (serviceId == null || StringUtils.isEmpty(serviceId)) {
-                logger.info("Found a service with no service id - ignoring: {}", service);
-                continue;
+        try (SonyTransport transport = new SonyHttpTransport(irccUrl, GsonUtilities.getDefaultGson())) {
+            
+            final HttpResponse resp = transport.executeGet(irccUrl);
+            if (resp.getHttpCode() != HttpStatus.OK_200) {
+                throw resp.createException();
             }
-
-            services.put(serviceId, service);
-
-            final URL scpdUrl = service.getScpdUrl(baseUrl);
-            if (scpdUrl != null) {
-                final HttpResponse spcdResponse = requestor.sendGetCommand(scpdUrl.toExternalForm());
-                if (spcdResponse.getHttpCode() != HttpStatus.OK_200) {
-                    throw spcdResponse.createException();
+    
+            this.baseUrl = new URL(irccUrl);
+    
+            final String irccResponse = resp.getContent();
+            final IrccRoot irccRoot = IrccXmlReader.ROOT.fromXML(irccResponse);
+            if (irccRoot == null) {
+                throw new IOException("IRCC response (" + irccUrl + ") was not valid: " + irccResponse);
+            }
+    
+            final IrccDevice irccDevice = irccRoot.getDevice();
+            if (irccDevice == null) {
+                throw new IOException("IRCC response (" + irccUrl + ") didn't contain an IRCC device");
+            }
+            this.irccDevice = irccDevice;
+    
+            for (UpnpService service : irccDevice.getServices()) {
+                final String serviceId = service.getServiceId();
+    
+                if (serviceId == null || StringUtils.isEmpty(serviceId)) {
+                    logger.info("Found a service with no service id - ignoring: {}", service);
+                    continue;
                 }
-
-                final String scpdResponse = spcdResponse.getContent();
-                final UpnpScpd scpd = UpnpXmlReader.SCPD.fromXML(scpdResponse);
-                if (scpd == null) {
-                    logger.debug("spcd url '{}' didn't contain a valid response (and is being ignored): {}", scpdUrl,
-                            spcdResponse);
+    
+                services.put(serviceId, service);
+    
+                final URL scpdUrl = service.getScpdUrl(baseUrl);
+                if (scpdUrl != null) {
+                    final HttpResponse spcdResponse = transport.executeGet(scpdUrl.toExternalForm());
+                    if (spcdResponse.getHttpCode() != HttpStatus.OK_200) {
+                        throw spcdResponse.createException();
+                    }
+    
+                    final String scpdResponse = spcdResponse.getContent();
+                    final UpnpScpd scpd = UpnpXmlReader.SCPD.fromXML(scpdResponse);
+                    if (scpd == null) {
+                        logger.debug("spcd url '{}' didn't contain a valid response (and is being ignored): {}", scpdUrl,
+                                spcdResponse);
+                    } else {
+                        scpdByService.put(serviceId, scpd);
+                    }
+                }
+            }
+    
+            final IrccUnrDeviceInfo deviceInfo = irccDevice.getUnrDeviceInfo();
+            final String actionsUrl = deviceInfo == null ? null : deviceInfo.getActionListUrl();
+    
+            IrccActionList actionsList;
+            IrccSystemInformation sysInfo;
+    
+            // If empty - likely version 1.0 or 1.1
+            if (actionsUrl == null || StringUtils.isEmpty(actionsUrl)) {
+                logger.debug("No actionsurl - generating default");
+                actionsList = new IrccActionList();
+                sysInfo = new IrccSystemInformation();
+            } else {
+                final HttpResponse actionsResp = transport.executeGet(actionsUrl);
+                if (actionsResp.getHttpCode() == HttpStatus.OK_200) {
+                    final String actionXml = actionsResp.getContent();
+                    final IrccActionList actionList = IrccXmlReader.ACTIONS.fromXML(actionXml);
+                    if (actionList == null) {
+                        throw new IOException("IRCC Actions response (" + actionsUrl + ")  was not valid: " + actionXml);
+                    }
+                    actionsList = actionList;
                 } else {
-                    scpdByService.put(serviceId, scpd);
+                    throw actionsResp.createException();
+                }
+    
+                final String sysUrl = actionsList.getUrlForAction(AN_GETSYSTEMINFORMATION);
+                if (sysUrl == null || StringUtils.isEmpty(sysUrl)) {
+                    throw new NotImplementedException(AN_GETSYSTEMINFORMATION + " is not supported");
+                }
+    
+                final HttpResponse sysResp = transport.executeGet(sysUrl);
+                if (sysResp.getHttpCode() == HttpStatus.OK_200) {
+                    final String sysXml = sysResp.getContent();
+                    final IrccSystemInformation sys = IrccXmlReader.SYSINFO.fromXML(sysXml);
+                    if (sys == null) {
+                        throw new IOException("IRCC systems info response (" + sysUrl + ")  was not valid: " + sysXml);
+                    }
+                    sysInfo = sys;
+                } else {
+                    throw sysResp.createException();
                 }
             }
-        }
-
-        final IrccUnrDeviceInfo deviceInfo = irccDevice.getUnrDeviceInfo();
-        final String actionsUrl = deviceInfo == null ? null : deviceInfo.getActionListUrl();
-
-        IrccActionList actionsList;
-        IrccSystemInformation sysInfo;
-
-        // If empty - likely version 1.0 or 1.1
-        if (actionsUrl == null || StringUtils.isEmpty(actionsUrl)) {
-            logger.debug("No actionsurl - generating default");
-            actionsList = new IrccActionList();
-            sysInfo = new IrccSystemInformation();
-        } else {
-            final HttpResponse actionsResp = requestor.sendGetCommand(actionsUrl);
-            if (actionsResp.getHttpCode() == HttpStatus.OK_200) {
-                final String actionXml = actionsResp.getContent();
-                final IrccActionList actionList = IrccXmlReader.ACTIONS.fromXML(actionXml);
-                if (actionList == null) {
-                    throw new IOException("IRCC Actions response (" + actionsUrl + ")  was not valid: " + actionXml);
-                }
-                actionsList = actionList;
-            } else {
-                throw actionsResp.createException();
-            }
-
-            final String sysUrl = actionsList.getUrlForAction(AN_GETSYSTEMINFORMATION);
-            if (sysUrl == null || StringUtils.isEmpty(sysUrl)) {
-                throw new NotImplementedException(AN_GETSYSTEMINFORMATION + " is not supported");
-            }
-
-            final HttpResponse sysResp = requestor.sendGetCommand(sysUrl);
-            if (sysResp.getHttpCode() == HttpStatus.OK_200) {
-                final String sysXml = sysResp.getContent();
-                final IrccSystemInformation sys = IrccXmlReader.SYSINFO.fromXML(sysXml);
-                if (sys == null) {
-                    throw new IOException("IRCC systems info response (" + sysUrl + ")  was not valid: " + sysXml);
-                }
-                sysInfo = sys;
-            } else {
-                throw sysResp.createException();
-            }
-        }
-
-        this.actions = actionsList;
-        this.sysInfo = sysInfo;
-
-        IrccRemoteCommands remoteCommands;
-
-        final IrccCodeList codeList = irccDevice.getCodeList();
-        final String remoteCommandsUrl = getUrlForAction(IrccClient.AN_GETREMOTECOMMANDLIST);
-        if (remoteCommandsUrl == null || StringUtils.isEmpty(remoteCommandsUrl)) {
-            remoteCommands = new IrccRemoteCommands().withCodeList(codeList);
-        } else {
-            final HttpResponse rcResp = requestor.sendGetCommand(remoteCommandsUrl);
-            if (rcResp.getHttpCode() == HttpStatus.OK_200) {
-                final String rcXml = rcResp.getContent();
-                final IrccRemoteCommands rcCmds = IrccXmlReader.REMOTECOMMANDS.fromXML(rcXml);
-                if (rcCmds == null) {
-                    throw new IOException(
-                            "IRCC systems info response (" + remoteCommandsUrl + ")  was not valid: " + rcXml);
-                }
-                remoteCommands = rcCmds;
-            } else {
+    
+            this.actions = actionsList;
+            this.sysInfo = sysInfo;
+    
+            IrccRemoteCommands remoteCommands;
+    
+            final IrccCodeList codeList = irccDevice.getCodeList();
+            final String remoteCommandsUrl = getUrlForAction(IrccClient.AN_GETREMOTECOMMANDLIST);
+            if (remoteCommandsUrl == null || StringUtils.isEmpty(remoteCommandsUrl)) {
                 remoteCommands = new IrccRemoteCommands().withCodeList(codeList);
+            } else {
+                final HttpResponse rcResp = transport.executeGet(remoteCommandsUrl);
+                if (rcResp.getHttpCode() == HttpStatus.OK_200) {
+                    final String rcXml = rcResp.getContent();
+                    final IrccRemoteCommands rcCmds = IrccXmlReader.REMOTECOMMANDS.fromXML(rcXml);
+                    if (rcCmds == null) {
+                        throw new IOException(
+                                "IRCC systems info response (" + remoteCommandsUrl + ")  was not valid: " + rcXml);
+                    }
+                    remoteCommands = rcCmds;
+                } else {
+                    remoteCommands = new IrccRemoteCommands().withCodeList(codeList);
+                }
             }
+    
+            this.remoteCommands = remoteCommands;
+                
         }
-
-        this.remoteCommands = remoteCommands;
     }
 
     /**
@@ -235,20 +237,6 @@ public class IrccClient implements AutoCloseable {
      */
     public URL getBaseUrl() {
         return baseUrl;
-    }
-
-    /**
-     * Gets the current status from the IRCC device
-     *
-     * @return the non-null HttpResponse of the request
-     */
-    public HttpResponse getStatus() {
-        final String statusUrl = getUrlForAction(IrccClient.AN_GETSTATUS);
-        if (statusUrl == null) {
-            return new HttpResponse(HttpStatus.SERVICE_UNAVAILABLE_503, "");
-        } else {
-            return requestor.sendGetCommand(statusUrl);
-        }
     }
 
     /**
@@ -341,8 +329,36 @@ public class IrccClient implements AutoCloseable {
         return scpd.getSoap(serviceType, actionName, parms);
     }
 
-    @Override
-    public void close() {
-        requestor.close();
+    /**
+     * Executes a SOAP command 
+     * @param transport a non-null transport to use
+     * @param cmd a non-null, non-empty cmd to execute
+     * @return an HttpResponse indicating the results of the execution
+     */
+    public HttpResponse executeSoap(SonyTransport transport, String cmd) {
+        Objects.requireNonNull(transport, "transport cannot be null");
+        Validate.notEmpty(cmd, "cmd cannot be empty");
+
+        final UpnpService service = getService(IrccClient.SRV_IRCC);
+        if (service == null) {
+            logger.debug("IRCC Service was not found");
+            return new HttpResponse(HttpStatus.NOT_FOUND_404, "IRCC Service was not found");
+        }
+
+        final String soap = getSOAP(IrccClient.SRV_IRCC, IrccClient.SRV_ACTION_SENDIRCC, cmd);
+        if (soap == null || StringUtils.isEmpty(soap)) {
+            logger.debug("Unable to find the IRCC service/action to send IRCC");
+            return new HttpResponse(HttpStatus.NOT_FOUND_404, "Unable to find the IRCC service/action to send IRCC");
+        }
+
+        final URL baseUrl = getBaseUrl();
+        final URL controlUrl = service.getControlUrl(baseUrl);
+        if (controlUrl == null) {
+            logger.debug("ControlURL for IRCC service wasn't found: {}", baseUrl);
+            return new HttpResponse(HttpStatus.NOT_FOUND_404, "ControlURL for IRCC service wasn't found: " + baseUrl);
+        } else {
+            return transport.executePostXml(controlUrl.toExternalForm(), soap, new TransportOptionHeader("SOAPACTION",
+            "\"" + service.getServiceType() + "#" + IrccClient.SRV_ACTION_SENDIRCC + "\""));
+        }
     }
 }

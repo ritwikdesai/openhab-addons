@@ -35,6 +35,7 @@ import java.util.regex.Matcher;
 import java.util.stream.Collectors;
 
 import org.apache.commons.lang.BooleanUtils;
+import org.apache.commons.lang.ObjectUtils;
 import org.apache.commons.lang.StringUtils;
 import org.apache.commons.lang.Validate;
 import org.eclipse.jdt.annotation.NonNullByDefault;
@@ -364,7 +365,12 @@ class ScalarWebAvContentProtocol<T extends ThingCallback<String>> extends Abstra
         return descriptors;
     }
 
+    /**
+     * Adds the content list descriptors
+     * @param descriptors the non-null, possibly empty list of descriptors
+     */
     private void addContentListDescriptors(List<ScalarWebChannelDescriptor> descriptors) {
+        Objects.requireNonNull(descriptors, "descriptors cannot be null");
 
         // The control (parent uri/uri/index) and virtual channels (childcount/selected)
         descriptors.add(createDescriptor(createChannel(CN_PARENTURI), "String", "scalarwebavcontrolcontentparenturi"));
@@ -559,9 +565,7 @@ class ScalarWebAvContentProtocol<T extends ThingCallback<String>> extends Abstra
                     createDescriptor(createChannel(CN_VIDEOCODEC), "String", "scalarwebavcontrolcontentvideocodec"));
             descriptors.add(
                     createDescriptor(createChannel(CN_VISIBILITY), "String", "scalarwebavcontrolcontentvisibility"));
-
         } else if (VersionUtilities.equals(version, ScalarWebMethod.V1_5)) {
-
             descriptors
                     .add(createDescriptor(createChannel(CN_ALBUMNAME), "String", "scalarwebavcontrolcontentalbumname"));
             descriptors.add(createDescriptor(createChannel(CN_APPLICATIONNAME), "String",
@@ -732,8 +736,22 @@ class ScalarWebAvContentProtocol<T extends ThingCallback<String>> extends Abstra
 
     }
 
+    /**
+     * Adds input status descriptors for a specific input
+     * @param descriptors a non-null, possibly empty list of descriptors
+     * @param id a non-null, non-empty channel id
+     * @param uri a non-null, non-empty input uri
+     * @param title a non-null, non-empty input title
+     * @param apiVersion a non-null, non-empty API version
+     */
     private void addInputStatusDescriptor(List<ScalarWebChannelDescriptor> descriptors,
-            CurrentExternalInputsStatus_1_0 status, String id, String uri, String title) {
+            String id, String uri, String title, String apiVersion) {
+        Objects.requireNonNull(descriptors, "descriptors cannot be null");
+        Validate.notEmpty(id, "id cannot be empty");
+        Validate.notEmpty(uri, "uri cannot be empty");
+        Validate.notEmpty(title, "title cannot be empty");
+        Validate.notEmpty(apiVersion, "apiVersion cannot be empty");
+
         descriptors.add(createDescriptor(createChannel(IN_URI, id, uri), "String", "scalarwebavcontrolinpstatusuri",
                 "Input " + title + " URI", uri));
 
@@ -748,18 +766,21 @@ class ScalarWebAvContentProtocol<T extends ThingCallback<String>> extends Abstra
 
         descriptors.add(createDescriptor(createChannel(IN_ICON, id, uri), "String", "scalarwebavcontrolinpstatusicon",
                 "Input " + title + " Icon", uri));
+
+        if (StringUtils.equalsIgnoreCase(apiVersion, ScalarWebMethod.V1_1)) {
+            descriptors.add(createDescriptor(createChannel(IN_STATUS, id, uri), "String",
+                    "scalarwebavcontrolinpstatusstatus", "Input " + title + " Status", uri));
+        }
     }
 
-    private void addInputStatusDescriptor(List<ScalarWebChannelDescriptor> descriptors,
-            CurrentExternalInputsStatus_1_1 status, String id, String uri, String title) {
-
-        addInputStatusDescriptor(descriptors, (CurrentExternalInputsStatus_1_0) status, id, uri, title);
-
-        descriptors.add(createDescriptor(createChannel(IN_STATUS, id, uri), "String",
-                "scalarwebavcontrolinpstatusstatus", "Input " + title + " Status", uri));
-    }
-
+    /**
+     * Adds all input status descriptors
+     * @param descriptors a non-null, possibly empty list of descriptors
+     * @param cache a non-null channel cache
+     */
     private void addInputStatusDescriptors(List<ScalarWebChannelDescriptor> descriptors, ChannelIdCache cache) {
+        Objects.requireNonNull(descriptors, "descriptors cannot be null");
+        Objects.requireNonNull(cache, "cache cannot be null");
 
         try {
             final ScalarWebResult result = getInputStatus();
@@ -773,7 +794,7 @@ class ScalarWebAvContentProtocol<T extends ThingCallback<String>> extends Abstra
                     }
 
                     final String id = cache.getUniqueChannelId(status.getTitle(uri));
-                    addInputStatusDescriptor(descriptors, status, id, uri, status.getTitle(MAINTITLE));
+                    addInputStatusDescriptor(descriptors, id, uri, status.getTitle(MAINTITLE), ScalarWebMethod.V1_0);
                 }
             } else if (VersionUtilities.equals(version, ScalarWebMethod.V1_1)) {
                 for (CurrentExternalInputsStatus_1_1 status : result.asArray(CurrentExternalInputsStatus_1_1.class)) {
@@ -784,15 +805,21 @@ class ScalarWebAvContentProtocol<T extends ThingCallback<String>> extends Abstra
                     }
 
                     final String id = cache.getUniqueChannelId(status.getTitle(uri));
-                    addInputStatusDescriptor(descriptors, status, id, uri, status.getTitle(MAINTITLE));
+                    addInputStatusDescriptor(descriptors, id, uri, status.getTitle(MAINTITLE), ScalarWebMethod.V1_1);
                 }
             }
         } catch (IOException e) {
-
+            logger.debug("Error add input status description {}", e.getMessage());
         }
     }
 
+    /**
+     * Adds the parental rating descriptors
+     * @param descriptors a non-null, possibly empty list of descriptors
+     */
     private void addParentalRatingDescriptors(List<ScalarWebChannelDescriptor> descriptors) {
+        Objects.requireNonNull(descriptors, "descriptors cannot be null");
+
         try {
             // execute to verify if it exists
             getParentalRating();
@@ -815,11 +842,18 @@ class ScalarWebAvContentProtocol<T extends ThingCallback<String>> extends Abstra
             descriptors
                     .add(createDescriptor(createChannel(PR_UNRATEDLOCK), "String", "scalarwebavcontrolprunratedlock"));
         } catch (IOException e) {
-            logger.info("Exception occurring getting the parental ratings: {}", e.getMessage());
+            logger.debug("Exception occurring getting the parental ratings: {}", e.getMessage());
         }
     }
 
+    /**
+     * Adds the playing content descriptors
+     * @param descriptors a non-null, possibly empty list of descriptors
+     * @param cache a non-null channel cache
+     */
     private void addPlayingContentDescriptors(List<ScalarWebChannelDescriptor> descriptors, ChannelIdCache cache) {
+        Objects.requireNonNull(descriptors, "descriptors cannot be null");
+        Objects.requireNonNull(cache, "cache cannot be null");
 
         final Map<String, String> outputs = getTerminalOutputs(getTerminalStatuses());
 
@@ -968,7 +1002,14 @@ class ScalarWebAvContentProtocol<T extends ThingCallback<String>> extends Abstra
         }
     }
 
+    /**
+     * Adds the terminal status descriptors
+     * @param descriptors a non-null, possibly empty list of descriptors
+     * @param cache a non-null channel cache
+     */
     private void addTerminalStatusDescriptors(List<ScalarWebChannelDescriptor> descriptors, ChannelIdCache cache) {
+        Objects.requireNonNull(descriptors, "descriptors cannot be null");
+        Objects.requireNonNull(cache, "cache cannot be null");
         for (final CurrentExternalTerminalsStatus_1_0 term : getTerminalStatuses()) {
             final String uri = term.getUri();
             if (uri == null) {
@@ -1017,12 +1058,10 @@ class ScalarWebAvContentProtocol<T extends ThingCallback<String>> extends Abstra
                 final String version = getVersion(ScalarWebMethod.GETPLAYINGCONTENTINFO);
                 if (VersionUtilities.equals(version, ScalarWebMethod.V1_0, ScalarWebMethod.V1_1)) {
                     notifyPlayingContentInfo(event.as(PlayingContentInfoResult_1_0.class), getIdForOutput(MAINOUTPUT));
-                } else if (VersionUtilities.equals(version, ScalarWebMethod.V1_2)) {
+                } else {
                     final PlayingContentInfoResult_1_2 res = event.as(PlayingContentInfoResult_1_2.class);
                     final String output = res.getOutput(MAINOUTPUT);
                     notifyPlayingContentInfo(res, getIdForOutput(output));
-                } else {
-
                 }
 
                 break;
@@ -1037,7 +1076,14 @@ class ScalarWebAvContentProtocol<T extends ThingCallback<String>> extends Abstra
         }
     }
 
+    /**
+     * Get's the channel id for the given output
+     * @param output a non-null, non-empty output identifier
+     * @return a channel identifier representing the output
+     */
     private String getIdForOutput(String output) {
+        Validate.notEmpty(output, "output cannot be empty");
+
         for (Channel chl : getContext().getThing().getChannels()) {
             final ScalarWebChannel swc = new ScalarWebChannel(chl);
             if (StringUtils.equalsIgnoreCase(swc.getCategory(), TERM_URI)) {
@@ -1051,7 +1097,13 @@ class ScalarWebAvContentProtocol<T extends ThingCallback<String>> extends Abstra
         return SonyUtil.createValidChannelUId(output);
     }
 
+    /**
+     * Get the source identifier for the given URL
+     * @param uid a non-null, non-empty source
+     * @return the source identifier (or uid if none found)
+     */
     private String getSourceFromUri(String uid) {
+        Validate.notEmpty(uid, "uid cannot be empty");
         // Following finds the source from the uri (radio:fm&content=x to radio:fm)
         final String src = getSources().stream().filter(s -> StringUtils.startsWith(uid, s.getSource())).findFirst()
                 .map(s -> s.getSource()).orElse(null);
@@ -1059,10 +1111,21 @@ class ScalarWebAvContentProtocol<T extends ThingCallback<String>> extends Abstra
 
     }
 
+    /**
+     * Returns the current input statuses.  This method simply calls getInputStatus(false) to get the cached result if it exists
+     * @return the ScalarWebResult containing the status information for all the inputs
+     * @throws IOException if an IOException occurrs getting the input status
+     */
     private ScalarWebResult getInputStatus() throws IOException {
         return getInputStatus(false);
     }
 
+    /**
+     * Returns the current input status.  If refresh is false, the cached version is used (if it exists) - otherwise we query the device for the statuses
+     * @param refresh true to refresh from the device, false to potentially use a cached version (if it exists)
+     * @return the ScalarWebResult containing the status information for all the inputs
+     * @throws IOException if an IOException occurrs getting the input status
+     */
     private ScalarWebResult getInputStatus(boolean refresh) throws IOException {
         if (!refresh) {
             final ScalarWebResult rs = stateInputs.get();
@@ -1075,6 +1138,11 @@ class ScalarWebAvContentProtocol<T extends ThingCallback<String>> extends Abstra
         return res;
     }
 
+    /**
+     * Get's the parental rating from the device
+     * @return the ScalarWebResult containing the status information for all the inputs
+     * @throws IOException if an IOException occurrs getting the input status
+     */
     private ScalarWebResult getParentalRating() throws IOException {
         return execute(ScalarWebMethod.GETPARENTALRATINGSETTINGS);
     }
@@ -1082,7 +1150,8 @@ class ScalarWebAvContentProtocol<T extends ThingCallback<String>> extends Abstra
     /**
      * Gets the playing content info
      *
-     * @return the playing content info or null if an error occurred
+     * @return the ScalarWebResult containing the status information for all the inputs
+     * @throws IOException if an IOException occurrs getting the input status
      */
     private ScalarWebResult getPlayingContentInfo() throws IOException {
         return execute(ScalarWebMethod.GETPLAYINGCONTENTINFO, version -> {
@@ -1094,14 +1163,18 @@ class ScalarWebAvContentProtocol<T extends ThingCallback<String>> extends Abstra
     }
 
     /**
-     * Gets a list of the schemes
-     *
-     * @return the non-null, possibly empty list of schemes
+     * Returns the current set of schemes.  This method simply calls getSchemes(false) to get the cached result if it exists
+     * @return a non-null, possibly empty set of schemes
      */
     private Set<Scheme> getSchemes() {
         return getSchemes(false);
     }
 
+    /**
+     * Returns the current set of schemes.  If refresh is false, the cached version is used (if it exists) - otherwise we query the device for the schemes
+     * @param refresh true to refresh from the device, false to potentially use a cached version (if it exists)
+     * @return a non-null, possibly empty set of schemes
+     */
     private Set<Scheme> getSchemes(boolean refresh) {
         final Set<Scheme> cacheSchemes = stateSchemes.get();
         if (!cacheSchemes.isEmpty() && !refresh) {
@@ -1125,17 +1198,20 @@ class ScalarWebAvContentProtocol<T extends ThingCallback<String>> extends Abstra
     }
 
     /**
-     * Gets list of sources for a scheme. Some schemes are not valid for specific versions of the source (like DLNA is
-     * only valid 1.2+) - so query all sources by scheme and return a consolidated list
-     *
-     * @param scheme the non-null scheme
-     * @return the non-null, possibly empty list of sources
+     * Returns the current set of sources.  This method simply calls getSources(false) to get the cached result if it exists
+     * @return a non-null, possibly empty set of sources
      */
-
     private Set<Source> getSources() {
         return getSources(false);
     }
 
+    /**
+     * Gets list of sources for a scheme. Some schemes are not valid for specific versions of the source (like DLNA is
+     * only valid 1.2+) - so query all sources by scheme and return a consolidated list
+     *
+     * @param refresh true to refresh from the device, false to potentially use a cached version (if it exists)
+     * @return the non-null, possibly empty list of sources
+     */
     private Set<Source> getSources(boolean refresh) {
         final Set<Source> sources = new HashSet<>();
 
@@ -1200,7 +1276,8 @@ class ScalarWebAvContentProtocol<T extends ThingCallback<String>> extends Abstra
                     final String title = inp.getTitle(uri);
                     sources.add(new InputSource(uri, title, null));
                 }
-            } catch (IOException ex) {
+            } catch (IOException e) {
+                logger.debug("Error updating terminal source {}", e.getMessage());
             }
         }
 
@@ -1228,7 +1305,7 @@ class ScalarWebAvContentProtocol<T extends ThingCallback<String>> extends Abstra
                     final List<StateOption> options = sources.stream()
                             .filter(s -> s.outputs.size() == 0 || s.outputs.contains(uri))
                             .map(s -> new StateOption(s.uri, s.title == null ? s.uri : s.title))
-                            .sorted((a, b) -> a.getLabel().compareTo(b.getLabel())).collect(Collectors.toList());
+                            .sorted((a, b) -> ObjectUtils.compare(a.getLabel(), b.getLabel())).collect(Collectors.toList());
 
                     final String id = getIdForOutput(uri);
                     final ScalarWebChannel cnl = createChannel(TERM_SOURCE, id, uri);
@@ -1260,7 +1337,7 @@ class ScalarWebAvContentProtocol<T extends ThingCallback<String>> extends Abstra
         try {
             terms.addAll(getTerminalStatus().asArray(CurrentExternalTerminalsStatus_1_0.class));
         } catch (IOException e) {
-
+            logger.debug("Error getting terminal statuses {}", e.getMessage());
         }
 
         // If no outputs, create our dummy 'main' output
@@ -1543,7 +1620,6 @@ class ScalarWebAvContentProtocol<T extends ThingCallback<String>> extends Abstra
 
         final Visibility visibility = clr.getVisibility();
         if (visibility != null) {
-
             stateChanged(CN_CHANNELSURFINGVISIBILITY, SonyUtil.newStringType(visibility.getChannelSurfingVisibility()));
             stateChanged(CN_EPGVISIBILITY, SonyUtil.newStringType(visibility.getEpgVisibility()));
             stateChanged(CN_VISIBILITY, SonyUtil.newStringType(visibility.getVisibility()));
@@ -1671,7 +1747,7 @@ class ScalarWebAvContentProtocol<T extends ThingCallback<String>> extends Abstra
                 }
             }
         } catch (IOException e) {
-
+            logger.debug("Error notify current terminal status {}", e.getMessage());
         }
     }
 
@@ -1728,7 +1804,6 @@ class ScalarWebAvContentProtocol<T extends ThingCallback<String>> extends Abstra
 
         final String sourceUri = pci.getUri();
         if (sourceUri != null && StringUtils.isNotEmpty(sourceUri)) {
-
             // statePlaying.put(output, new PlayingState(sourceUri, preset));
             statePlaying.compute(id, (k, v) -> {
                 if (v == null) {
@@ -1853,7 +1928,6 @@ class ScalarWebAvContentProtocol<T extends ThingCallback<String>> extends Abstra
         if (StringUtils.isEmpty(state.parentUri)) {
             notifyContentListResult();
         } else {
-
             Count ct;
 
             try {
@@ -1968,7 +2042,7 @@ class ScalarWebAvContentProtocol<T extends ThingCallback<String>> extends Abstra
                 }
             }
         } catch (IOException e) {
-
+            logger.debug("Error refreshing current external input status {}", e.getMessage());
         }
     }
 
@@ -2014,7 +2088,7 @@ class ScalarWebAvContentProtocol<T extends ThingCallback<String>> extends Abstra
                 }
             }
         } catch (IOException e) {
-
+            logger.debug("Error refreshing playing content info {}", e.getMessage());
         }
     }
 
@@ -2200,7 +2274,6 @@ class ScalarWebAvContentProtocol<T extends ThingCallback<String>> extends Abstra
                     }
                     break;
                 }
-
             }
         }
     }

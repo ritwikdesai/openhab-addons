@@ -21,7 +21,7 @@ import org.eclipse.jdt.annotation.Nullable;
 import org.openhab.binding.sony.internal.SonyUtil;
 
 /**
- * Simply helper class to ensure channel IDs are unique
+ * A simple helper class to ensure channel IDs are unique
  *
  * @author Tim Roberts - Initial contribution
  */

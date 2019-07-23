@@ -25,20 +25,23 @@ import org.openhab.binding.sony.internal.SonyBindingConstants;
 @NonNullByDefault
 public class DialConstants {
 
-    /** The constant for the thing type */
-    public static final ThingTypeUID THING_TYPE_DIAL = new ThingTypeUID(SonyBindingConstants.BINDING_ID,
-            SonyBindingConstants.DIAL_THING_TYPE_PREFIX);
+        /** The constant for the thing type */
+        public static final ThingTypeUID THING_TYPE_DIAL = new ThingTypeUID(SonyBindingConstants.BINDING_ID,
+                        SonyBindingConstants.DIAL_THING_TYPE_PREFIX);
 
-    /** The channel id constants */
-    public static final ChannelTypeUID CHANNEL_TITLE_UID = new ChannelTypeUID(SonyBindingConstants.BINDING_ID,
-            "dialtitle");
-    public static final ChannelTypeUID CHANNEL_ICON_UID = new ChannelTypeUID(SonyBindingConstants.BINDING_ID,
-            "dialicon");
-    public static final ChannelTypeUID CHANNEL_STATE_UID = new ChannelTypeUID(SonyBindingConstants.BINDING_ID,
-            "dialstate");
-    static final String CHANNEL_TITLE = "title";
-    static final String CHANNEL_ICON = "icon";
-    static final String CHANNEL_STATE = "state";
+        /** The constant requesting access */
+        public static final String ACCESSCODE_RQST = "RQST";
+        
+        /** The channel id constants */
+        public static final ChannelTypeUID CHANNEL_TITLE_UID = new ChannelTypeUID(SonyBindingConstants.BINDING_ID,
+                        "dialtitle");
+        public static final ChannelTypeUID CHANNEL_ICON_UID = new ChannelTypeUID(SonyBindingConstants.BINDING_ID,
+                        "dialicon");
+        public static final ChannelTypeUID CHANNEL_STATE_UID = new ChannelTypeUID(SonyBindingConstants.BINDING_ID,
+                        "dialstate");
+        static final String CHANNEL_TITLE = "title";
+        static final String CHANNEL_ICON = "icon";
+        static final String CHANNEL_STATE = "state";
 
-    static final String CHANNEL_PROP_APPLID = "applid";
+        static final String CHANNEL_PROP_APPLID = "applid";
 }

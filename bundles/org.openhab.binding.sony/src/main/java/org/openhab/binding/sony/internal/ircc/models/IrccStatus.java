@@ -89,8 +89,9 @@ public class IrccStatus {
     public @Nullable String getItemValue(String name) {
         Validate.notEmpty(name, "name cannot be empty");
 
-        if (items != null) {
-            for (IrccStatusItem item : items) {
+        final List<@Nullable IrccStatusItem> localItems = items;
+        if (localItems != null) {
+            for (IrccStatusItem item : localItems) {
                 if (item != null && StringUtils.equalsIgnoreCase(name, item.getField())) {
                     return item.getValue();
                 }

@@ -31,6 +31,7 @@ import org.eclipse.smarthome.core.types.Command;
 import org.eclipse.smarthome.core.types.RefreshType;
 import org.eclipse.smarthome.core.types.State;
 import org.openhab.binding.sony.internal.AbstractThingHandler;
+import org.openhab.binding.sony.internal.LoginUnsuccessfulResponse;
 import org.openhab.binding.sony.internal.SonyUtil;
 import org.openhab.binding.sony.internal.ThingCallback;
 import org.slf4j.Logger;
@@ -176,17 +177,23 @@ public class DialHandler extends AbstractThingHandler<DialConfig> {
                         }
                     });
 
-            final ThingBuilder thingBuilder = editThing();
-            thingBuilder
-                    .withChannels(DialUtil.generateChannels(getThing().getUID(), localProtocolHandler.getDialApps()));
-            updateThing(thingBuilder.build());
-
             SonyUtil.checkInterrupt();
-            SonyUtil.close(protocolHandler.getAndSet(localProtocolHandler));
-            updateStatus(ThingStatus.ONLINE);
+            final LoginUnsuccessfulResponse response = localProtocolHandler.login();
+            if (response == null) {
+                final ThingBuilder thingBuilder = editThing();
+                thingBuilder.withChannels(
+                        DialUtil.generateChannels(getThing().getUID(), localProtocolHandler.getDialApps().values()));
+                updateThing(thingBuilder.build());
 
-            SonyUtil.checkInterrupt();
-            logger.debug("DIAL System now connected");
+                SonyUtil.checkInterrupt();
+                SonyUtil.close(protocolHandler.getAndSet(localProtocolHandler));
+                updateStatus(ThingStatus.ONLINE);
+
+                SonyUtil.checkInterrupt();
+                logger.debug("DIAL System now connected");
+            } else {
+                updateStatus(ThingStatus.OFFLINE, response.getThingStatusDetail(), response.getMessage());
+            }
         } catch (IOException e) {
             updateStatus(ThingStatus.OFFLINE, ThingStatusDetail.COMMUNICATION_ERROR,
                     "Error connecting to DIAL device (may need to turn it on manually): " + e.getMessage());

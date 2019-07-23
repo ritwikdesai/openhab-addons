@@ -10,9 +10,10 @@
  *
  * SPDX-License-Identifier: EPL-2.0
  */
-package org.openhab.binding.sony.internal.scalarweb.transports;
+package org.openhab.binding.sony.internal.transports;
 
 import java.io.IOException;
+import java.net.URL;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
@@ -20,6 +21,7 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.Objects;
 
+import javax.ws.rs.ProcessingException;
 import javax.ws.rs.client.Client;
 import javax.ws.rs.client.ClientBuilder;
 import javax.ws.rs.client.ClientRequestContext;
@@ -31,10 +33,11 @@ import javax.ws.rs.client.WebTarget;
 import javax.ws.rs.core.NewCookie;
 import javax.ws.rs.core.Response;
 
-import org.apache.commons.lang.Validate;
+import com.google.gson.Gson;
+
 import org.eclipse.jdt.annotation.NonNullByDefault;
 import org.eclipse.jdt.annotation.Nullable;
-import org.openhab.binding.sony.internal.net.FilterOption;
+import org.openhab.binding.sony.internal.net.NetUtil;
 import org.openhab.binding.sony.internal.scalarweb.gson.GsonUtilities;
 import org.openhab.binding.sony.internal.scalarweb.models.ScalarWebMethod;
 import org.openhab.binding.sony.internal.scalarweb.models.ScalarWebRequest;
@@ -44,18 +47,16 @@ import org.openhab.binding.sony.internal.scalarweb.models.api.ActRegisterOptions
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.google.gson.Gson;
-
 /**
- * This class represents authorization filter used to reauthorize our webscalar connection
+ * This class represents authorization filter used to reauthorize our sony connection
  *
  * @author Tim Roberts - Initial contribution
  */
 @NonNullByDefault
-public class ScalarAuthFilter implements ClientRequestFilter, ClientResponseFilter {
+public class SonyAuthFilter implements ClientRequestFilter, ClientResponseFilter {
 
     /** The logger */
-    private final Logger logger = LoggerFactory.getLogger(ScalarAuthFilter.class);
+    private final Logger logger = LoggerFactory.getLogger(SonyAuthFilter.class);
 
     /** The map of current cookies used for authentication */
     private final Map<String, NewCookie> cookies = new HashMap<>();
@@ -64,23 +65,21 @@ public class ScalarAuthFilter implements ClientRequestFilter, ClientResponseFilt
     private static final String AUTHCOOKIENAME = "auth";
 
     /** The base URL of the access control service */
-    private final String baseUrl;
+    private final URL baseUrl;
 
-    private static final String OPT_AUTOAUTH = "autoAuth";
-    public static final FilterOption OPTION_AUTOAUTH = new FilterOption(OPT_AUTOAUTH, Boolean.TRUE);
-
-    private final PropDelegate propDelegate;
+    private final AutoAuth autoAuth;
 
     /**
-     * Instantiates a new scalar auth filter from the device information
+     * Instantiates a new sony auth filter from the device information
      *
-     * @param baseUrl the non-null, non-empty base URL for the access control service
+     * @param baseUrl  the non-null, base URL for the access control service
+     * @param autoAuth the non-null auto auth callback
      */
-    public ScalarAuthFilter(String baseUrl, PropDelegate propDelegate) {
-        Validate.notEmpty(baseUrl, "baseUrl cannot be empty");
-        Objects.requireNonNull(propDelegate, "propDelegate cannot be null");
+    public SonyAuthFilter(URL baseUrl, AutoAuth autoAuth) {
+        Objects.requireNonNull(baseUrl, "baseUrl cannot be empty");
+        Objects.requireNonNull(autoAuth, "autoAuth cannot be null");
         this.baseUrl = baseUrl;
-        this.propDelegate = propDelegate;
+        this.autoAuth = autoAuth;
     }
 
     @Override
@@ -126,41 +125,43 @@ public class ScalarAuthFilter implements ClientRequestFilter, ClientResponseFilt
             }
         }
 
-        if (authNeeded && propDelegate.getProperty(OPT_AUTOAUTH) == Boolean.TRUE) {
+        if (authNeeded && autoAuth.isAutoAuth()) {
             logger.debug("Trying to renew our authorization cookie");
             final Client client = ClientBuilder.newClient();
             // client.register(new LoggingFilter());
 
-            final int idx = baseUrl.lastIndexOf("/");
-            String deviceUrl = idx >= 0 ? baseUrl.substring(0, idx) : baseUrl;
-
-            final String actControlUrl = deviceUrl + "/" + ScalarWebService.ACCESSCONTROL;
+            final String actControlUrl = NetUtil.getSonyUrl(baseUrl, ScalarWebService.ACCESSCONTROL);
 
             final WebTarget target = client.target(actControlUrl);
             final Gson gson = GsonUtilities.getDefaultGson();
 
             final String json = gson.toJson(new ScalarWebRequest(1, ScalarWebMethod.ACTREGISTER, ScalarWebMethod.V1_0,
                     new ActRegisterId(), new Object[] { new ActRegisterOptions() }));
-            final Response rsp = target.request().post(Entity.json(json));
 
-            final Map<String, NewCookie> newCookies = rsp.getCookies();
-            if (newCookies != null) {
-                final NewCookie authCookie = newCookies.get(AUTHCOOKIENAME);
-                if (authCookie != null) {
-                    logger.debug("Authorization cookie was renewed");
-                    cookies.put(AUTHCOOKIENAME, authCookie);
+            try {
+                final Response rsp = target.request().post(Entity.json(json));
+
+                final Map<String, NewCookie> newCookies = rsp.getCookies();
+                if (newCookies != null) {
+                    final NewCookie authCookie = newCookies.get(AUTHCOOKIENAME);
+                    if (authCookie != null) {
+                        logger.debug("Authorization cookie was renewed");
+                        cookies.put(AUTHCOOKIENAME, authCookie);
+                    } else {
+                        logger.debug("No authorization cookie was returned");
+                    }
                 } else {
                     logger.debug("No authorization cookie was returned");
                 }
-            } else {
-                logger.debug("No authorization cookie was returned");
+            } catch (ProcessingException e) {
+                logger.debug("Could not renew authorization cookie: {}", e.getMessage());
             }
         }
 
         requestCtx.getHeaders().put("Cookie", new ArrayList<Object>(cookies.values()));
     }
 
-    public interface PropDelegate {
-        public @Nullable Object getProperty(String key);
+    public interface AutoAuth {
+        boolean isAutoAuth();
     }
 }

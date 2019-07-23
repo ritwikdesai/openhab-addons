@@ -32,13 +32,12 @@ import org.eclipse.jdt.annotation.NonNullByDefault;
 import org.eclipse.jdt.annotation.Nullable;
 import org.openhab.binding.sony.internal.scalarweb.gson.GsonUtilities;
 import org.openhab.binding.sony.internal.scalarweb.models.ScalarWebMethod;
-import org.openhab.binding.sony.internal.scalarweb.models.ScalarWebRequest;
 import org.openhab.binding.sony.internal.scalarweb.models.ScalarWebService;
 import org.openhab.binding.sony.internal.scalarweb.models.api.ServiceProtocol;
 import org.openhab.binding.sony.internal.scalarweb.models.api.ServiceProtocols;
 import org.openhab.binding.sony.internal.scalarweb.models.api.SupportedApi;
-import org.openhab.binding.sony.internal.scalarweb.transports.SonyTransport;
-import org.openhab.binding.sony.internal.scalarweb.transports.SonyTransportFactory;
+import org.openhab.binding.sony.internal.transports.SonyTransport;
+import org.openhab.binding.sony.internal.transports.SonyTransportFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.w3c.dom.DOMException;
@@ -108,19 +107,27 @@ public class ScalarWebDeviceManager implements AutoCloseable {
         final SonyTransportFactory transportFactory = new SonyTransportFactory(baseUrl, gson,
                 context.getWebSocketClient(), context.getScheduler());
 
-        try (final SonyTransport<ScalarWebRequest> httpTransport = transportFactory
+        try (final SonyTransport httpTransport = transportFactory
                 .getSonyTransport(ScalarWebService.GUIDE, SonyTransport.HTTP)) {
             if (httpTransport == null) {
                 throw new IllegalArgumentException("Shouldn't happen - HTTP transport not found!");
             }
 
-            // Manually create the guide to get service protocols and supported methods
+            // Manually create the access control and guide to get service protocols and supported methods
             // Must use alternative supported api since we can't use ourselves to get the supported api
             final SupportedApi guideApi = SupportedApi.getSupportApiAlternate(ScalarWebService.GUIDE, httpTransport,
                     logger);
             final ScalarWebService guide = new ScalarWebService(transportFactory,
                     new ServiceProtocol(ScalarWebService.GUIDE, Collections.singleton(SonyTransport.HTTP)), version,
                     guideApi);
+
+            // Manually create the guide to get service protocols and supported methods
+            // Must use alternative supported api since we can't use ourselves to get the supported api
+            final SupportedApi accessApi = SupportedApi.getSupportApiAlternate(ScalarWebService.ACCESSCONTROL, httpTransport,
+                    logger);
+            final ScalarWebService access = new ScalarWebService(transportFactory,
+                    new ServiceProtocol(ScalarWebService.ACCESSCONTROL, Collections.singleton(SonyTransport.HTTP)), version,
+                    accessApi);
 
             final ServiceProtocols sps = guide.execute(ScalarWebMethod.GETSERVICEPROTOCOLS).as(ServiceProtocols.class);
             for (ServiceProtocol serviceProtocol : sps.getServiceProtocols()) {
@@ -132,6 +139,7 @@ public class ScalarWebDeviceManager implements AutoCloseable {
 
             final Map<String, ScalarWebService> myServices = new HashMap<String, ScalarWebService>();
             myServices.put(ScalarWebService.GUIDE, guide);
+            myServices.put(ScalarWebService.ACCESSCONTROL, access);
 
             final String localVersion = version;
             myServices.putAll(serviceProtocols.stream().map(serviceProtocol -> {

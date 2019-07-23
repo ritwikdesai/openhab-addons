@@ -10,26 +10,32 @@
 			<label>Dial URL</label>
 			<description>The URL access point for the DIAL service</description>
 		</parameter>
-		<parameter name="deviceMacAddress" type="text" required="false">
+		<parameter name="deviceMacAddress" type="text">
 			<context>network-address</context>
 			<label>MAC Address</label>
 			<description>The MAC address of the device</description>
 		</parameter>
-		<parameter name="refresh" type="integer" required="false">
+		<parameter name="accessCode" type="text">
+			<context>authentication</context>
+			<label>Access Code</label>
+			<description>The access code (or "RQST" to request one)</description>
+			<default>RQST</default>
+		</parameter>
+		<parameter name="refresh" type="integer">
 			<context>polling</context>
 			<label>Refresh Interval</label>
 			<description>The interval, in seconds, to refresh the device state (-1 to disable)</description>
 			<default>30</default>
 			<advanced>true</advanced>
 		</parameter>
-		<parameter name="retryPolling" type="integer" required="false">
+		<parameter name="retryPolling" type="integer">
 			<context>polling</context>
 			<label>Retry Polling</label>
 			<description>The time, in seconds, to retry a connection attempt (-1 to disable)</description>
 			<default>10</default>
 			<advanced>true</advanced>
 		</parameter>
-		<parameter name="checkStatusPolling" type="integer" required="false">
+		<parameter name="checkStatusPolling" type="integer">
 			<context>polling</context>
 			<label>Status Check Interval</label>
 			<description>The time, in seconds, to check the device status (-1 to disable)</description>

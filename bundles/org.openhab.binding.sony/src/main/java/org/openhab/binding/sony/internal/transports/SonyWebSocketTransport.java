@@ -10,7 +10,7 @@
  *
  * SPDX-License-Identifier: EPL-2.0
  */
-package org.openhab.binding.sony.internal.scalarweb.transports;
+package org.openhab.binding.sony.internal.transports;
 
 import java.io.IOException;
 import java.net.URI;
@@ -18,7 +18,6 @@ import java.nio.ByteBuffer;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
@@ -57,7 +56,7 @@ import com.google.gson.JsonParser;
  * @author Tim Roberts - Initial contribution
  */
 @NonNullByDefault
-public class SonyWebSocketTransport extends AbstractSonyTransport<ScalarWebRequest> {
+public class SonyWebSocketTransport extends AbstractSonyTransport {
     private final Logger logger = LoggerFactory.getLogger(SonyWebSocketTransport.class);
 
     private static final int CONN_EXPIRE_TIMEOUT_SECONDS = 10;
@@ -66,7 +65,7 @@ public class SonyWebSocketTransport extends AbstractSonyTransport<ScalarWebReque
 
     private final URI uri;
     private final Gson gson;
-    private final ExpiringMap<Integer, CompletableFuture<ScalarWebResult>> futures;
+    private final ExpiringMap<Integer, CompletableFuture<TransportResult>> futures;
 
     private @Nullable Session session;
 
@@ -79,6 +78,7 @@ public class SonyWebSocketTransport extends AbstractSonyTransport<ScalarWebReque
     public SonyWebSocketTransport(WebSocketClient webSocketClient, URI uri, Gson gson,
             @Nullable ScheduledExecutorService scheduler)
             throws InterruptedException, ExecutionException, TimeoutException, IOException {
+        super(uri.toURL());
         Objects.requireNonNull(webSocketClient, "webSocketClient cannot be null");
         Objects.requireNonNull(uri, "uri cannot be null");
         Objects.requireNonNull(gson, "gson cannot be null");
@@ -86,7 +86,7 @@ public class SonyWebSocketTransport extends AbstractSonyTransport<ScalarWebReque
         this.gson = gson;
         this.uri = uri;
 
-        futures = new ExpiringMap<Integer, CompletableFuture<ScalarWebResult>>(scheduler, CMD_EXPIRE_TIMEOUT_SECONDS,
+        futures = new ExpiringMap<Integer, CompletableFuture<TransportResult>>(scheduler, CMD_EXPIRE_TIMEOUT_SECONDS,
                 TimeUnit.SECONDS);
         futures.addExpireListener((k, v) -> {
             v.cancel(true);
@@ -145,22 +145,23 @@ public class SonyWebSocketTransport extends AbstractSonyTransport<ScalarWebReque
     }
 
     @Override
-    public Future<ScalarWebResult> executeRaw(String cmd) {
-        final ScalarWebRequest rqst = gson.fromJson(cmd, ScalarWebRequest.class);
-        return execute(rqst);
-    }
-
-    @Override
-    public Future<ScalarWebResult> execute(ScalarWebRequest cmd) {
-        final Session localSession = session;
-        if (localSession == null) {
-            return CompletableFuture.completedFuture(ScalarUtilities.createErrorResult(
-                    HttpStatus.INTERNAL_SERVER_ERROR_500, "No session established yet - wait for it to be connected"));
+    public CompletableFuture<TransportResult> execute(TransportPayload payload, TransportOption... options) {
+        if (!(payload instanceof TransportPayloadScalarWebRequest)) {
+            throw new IllegalArgumentException(
+                    "payload must be a TransportPayloadRequest: " + payload.getClass().getName());
         }
 
+        final Session localSession = session;
+        if (localSession == null) {
+            return CompletableFuture.completedFuture(new TransportResultScalarWebResult(
+                    ScalarUtilities.createErrorResult(HttpStatus.INTERNAL_SERVER_ERROR_500,
+                            "No session established yet - wait for it to be connected")));
+        }
+
+        final ScalarWebRequest cmd = ((TransportPayloadScalarWebRequest) payload).getPayload();
         final String jsonRequest = gson.toJson(cmd);
         try {
-            final CompletableFuture<ScalarWebResult> future = new CompletableFuture<>();
+            final CompletableFuture<TransportResult> future = new CompletableFuture<>();
             futures.put(cmd.getId(), future);
 
             logger.debug("Sending {} to {}", jsonRequest, uri);
@@ -168,8 +169,8 @@ public class SonyWebSocketTransport extends AbstractSonyTransport<ScalarWebReque
             return future;
         } catch (IOException e) {
             logger.debug("IOException sending {} to {}: {}", jsonRequest, uri, e.getMessage(), e);
-            return CompletableFuture.completedFuture(
-                    ScalarUtilities.createErrorResult(HttpStatus.INTERNAL_SERVER_ERROR_500, e.getMessage()));
+            return CompletableFuture.completedFuture(new TransportResultScalarWebResult(
+                    ScalarUtilities.createErrorResult(HttpStatus.INTERNAL_SERVER_ERROR_500, e.getMessage())));
         }
     }
 
@@ -188,11 +189,11 @@ public class SonyWebSocketTransport extends AbstractSonyTransport<ScalarWebReque
                 if (json.has("id")) {
                     final ScalarWebResult result = gson.fromJson(json, ScalarWebResult.class);
                     final Integer resultId = result.getId();
-                    final CompletableFuture<ScalarWebResult> future = futures.get(resultId);
+                    final CompletableFuture<TransportResult> future = futures.get(resultId);
                     if (future != null) {
                         logger.debug("Response received from server: {}", message);
                         futures.remove(resultId);
-                        future.complete(result);
+                        future.complete(new TransportResultScalarWebResult(result));
                     } else {
                         logger.debug("Response received from server but a waiting command wasn't found - ignored: {}",
                                 message);
@@ -213,7 +214,7 @@ public class SonyWebSocketTransport extends AbstractSonyTransport<ScalarWebReque
                 final UpgradeException e = (UpgradeException) t;
                 // 404 happens when the individual service has no websocket connection
                 // but there is a websocket server listening for other services
-                if (e.getResponseStatusCode() == 404) {
+                if (e.getResponseStatusCode() == HttpStatus.NOT_FOUND_404) {
                     logger.debug("No websocket listening for specific service {}", e.getRequestURI());
                     return;
                 } else if (e.getResponseStatusCode() == 0) {

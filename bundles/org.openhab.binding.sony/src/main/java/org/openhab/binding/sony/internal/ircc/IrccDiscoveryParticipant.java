@@ -34,8 +34,6 @@ import org.openhab.binding.sony.internal.SonyBindingConstants;
 import org.openhab.binding.sony.internal.UidUtils;
 import org.openhab.binding.sony.internal.ircc.models.IrccClient;
 import org.openhab.binding.sony.internal.ircc.models.IrccSystemInformation;
-import org.openhab.binding.sony.internal.net.HttpRequest;
-import org.openhab.binding.sony.internal.net.NetUtil;
 import org.openhab.binding.sony.internal.providers.SonyDefinitionProvider;
 import org.osgi.service.component.annotations.Component;
 import org.osgi.service.component.annotations.Reference;
@@ -70,12 +68,10 @@ public class IrccDiscoveryParticipant extends AbstractDiscoveryParticipant imple
 
         String sysWolAddress = null;
 
-        // Test to see if it supports the IRCC actions (X_CERS_ActionList_URL)
-        try (final HttpRequest request = NetUtil.createHttpRequest()) {
-            try (final IrccClient irccClient = new IrccClient(irccURL.toString())) {
-                final IrccSystemInformation systemInformation = irccClient.getSystemInformation();
-                sysWolAddress = systemInformation.getWolMacAddress();
-            }
+        try {
+            final IrccClient irccClient = new IrccClient(irccURL.toString());
+            final IrccSystemInformation systemInformation = irccClient.getSystemInformation();
+            sysWolAddress = systemInformation.getWolMacAddress();
         } catch (IOException e) {
             logger.debug("Exception getting device info: {}", e.getMessage(), e);
             return null;
@@ -99,10 +95,10 @@ public class IrccDiscoveryParticipant extends AbstractDiscoveryParticipant imple
         Objects.requireNonNull(device, "device cannot be null");
 
         if (isSonyDevice(device)) {
-            if (isScalarThingType(device)) {
-                logger.debug("Found a SCALAR thing type for this IRCC thing - ignoring IRCC");
-                return null;
-            }
+            // if (isScalarThingType(device)) {
+            //     logger.debug("Found a SCALAR thing type for this IRCC thing - ignoring IRCC");
+            //     return null;
+            // }
 
             final String modelName = getModelName(device);
             if (modelName == null || StringUtils.isEmpty(modelName)) {

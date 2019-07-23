@@ -14,9 +14,11 @@ package org.openhab.binding.sony.internal.net;
 
 import java.io.IOException;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Objects;
+import java.util.Set;
 
 import javax.ws.rs.ProcessingException;
 import javax.ws.rs.client.Client;
@@ -81,16 +83,7 @@ public class HttpRequest implements AutoCloseable {
     public HttpResponse sendGetCommand(String url, Header... rqstHeaders) {
         Validate.notEmpty(url, "url cannot be empty");
         try {
-            Builder rqst = client.target(url).request();
-
-            for (Entry<String, String> h : headers.entrySet()) {
-                rqst = rqst.header(h.getKey(), h.getValue());
-            }
-
-            for (Header hdr : rqstHeaders) {
-                rqst = rqst.header(hdr.getName(), hdr.getValue());
-            }
-
+            final Builder rqst = addHeaders(client.target(url).request(), rqstHeaders);
             final Response content = rqst.get();
 
             try {
@@ -102,7 +95,6 @@ public class HttpRequest implements AutoCloseable {
         } catch (ProcessingException | IOException e) {
             return new HttpResponse(HttpStatus.SERVICE_UNAVAILABLE_503, e.getMessage());
         }
-
     }
 
     /**
@@ -150,16 +142,7 @@ public class HttpRequest implements AutoCloseable {
         Validate.notEmpty(mediaType, "mediaType cannot be empty");
 
         try {
-            Builder rqst = client.target(url).request(mediaType);
-
-            for (Entry<String, String> h : headers.entrySet()) {
-                rqst = rqst.header(h.getKey(), h.getValue());
-            }
-
-            for (Header hdr : rqstHeaders) {
-                rqst = rqst.header(hdr.getName(), hdr.getValue());
-            }
-
+            final Builder rqst = addHeaders(client.target(url).request(mediaType), rqstHeaders);
             final Response content = rqst.post(Entity.entity(body, mediaType));
 
             try {
@@ -168,34 +151,22 @@ public class HttpRequest implements AutoCloseable {
             } finally {
                 content.close();
             }
-        } catch (IOException e) {
+        } catch (IOException | ProcessingException e) {
             return new HttpResponse(HttpStatus.SERVICE_UNAVAILABLE_503, e.getMessage());
         }
-
     }
 
     /**
      * Send delete command to the specified URL with the body and potentially request headers
      *
      * @param url         the non-null, non-empty URL
-     * @param body        the non-null, possibly empty body (of JSON)
      * @param rqstHeaders the list of {@link Header} to add to the request
      * @return the non-null http response
      */
-    public HttpResponse sendDeleteCommand(String url, String body, Header... rqstHeaders) {
+    public HttpResponse sendDeleteCommand(String url, Header... rqstHeaders) {
         Validate.notEmpty(url, "url cannot be empty");
-        Objects.requireNonNull(body, "body cannot be null");
         try {
-            Builder rqst = client.target(url).request();
-
-            for (Entry<String, String> h : headers.entrySet()) {
-                rqst = rqst.header(h.getKey(), h.getValue());
-            }
-
-            for (Header hdr : rqstHeaders) {
-                rqst = rqst.header(hdr.getName(), hdr.getValue());
-            }
-
+            final Builder rqst = addHeaders(client.target(url).request(), rqstHeaders);
             final Response content = rqst.delete();
 
             try {
@@ -207,9 +178,38 @@ public class HttpRequest implements AutoCloseable {
         } catch (IOException e) {
             return new HttpResponse(HttpStatus.SERVICE_UNAVAILABLE_503, e.getMessage());
         }
-
     }
 
+    /**
+     * Helper method to add the headers (preventing duplicates) to the builder
+     * @param bld a non-null builder
+     * @param hdrs a possibly empty list of headers
+     * @return the builder with the headers added
+     */
+    private Builder addHeaders(Builder bld, Header... hdrs) {
+        Objects.requireNonNull(bld, "bld cannot be null");
+
+        Builder localBuilder = bld;
+        final Set<String> hdrNames = new HashSet<>();
+
+        for (Header hdr : hdrs) {
+            final String hdrName = hdr.getName();
+            if (!hdrNames.contains(hdrName)) {
+                hdrNames.add(hdrName);
+                localBuilder = localBuilder.header(hdrName, hdr.getValue());
+            }
+        }
+
+        for (Entry<String, String> h : headers.entrySet()) {
+            final String hdrName = h.getKey();
+            if (!hdrNames.contains(hdrName)) {
+                hdrNames.add(hdrName);
+                localBuilder = localBuilder.header(hdrName, h.getValue());
+            }
+        }
+        return localBuilder;
+    }
+    
     /**
      * Adds a header to ALL request made
      *

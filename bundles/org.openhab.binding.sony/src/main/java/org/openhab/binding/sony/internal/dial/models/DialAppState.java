@@ -12,18 +12,14 @@
  */
 package org.openhab.binding.sony.internal.dial.models;
 
-import java.io.IOException;
 import java.net.URL;
-import java.util.Objects;
-
-import org.apache.commons.lang.StringUtils;
-import org.eclipse.jdt.annotation.NonNullByDefault;
-import org.eclipse.jdt.annotation.Nullable;
-import org.eclipse.jetty.http.HttpStatus;
-import org.openhab.binding.sony.internal.net.HttpRequest;
-import org.openhab.binding.sony.internal.net.HttpResponse;
 
 import com.thoughtworks.xstream.annotations.XStreamAlias;
+
+import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang.Validate;
+import org.eclipse.jdt.annotation.NonNullByDefault;
+import org.eclipse.jdt.annotation.Nullable;
 
 /**
  * This class represents the DIAL application state. The state will be retrieved from a call to {@link #get(URL)} and
@@ -65,22 +61,13 @@ public class DialAppState {
     }
 
     /**
-     * Get's the DIAL application state from the given URL
+     * Get's the DIAL application state from the given content
      *
-     * @param appStateUrl the non-null application state URL
-     * @return a potentially null {@link DialAppState}
-     * @throws IOException if an IOException occurs reading the URL
+     * @param xml the non-null, non-empty XML 
+     * @return a {@link DialAppState}
      */
-    public static @Nullable DialAppState get(URL appStateUrl) throws IOException {
-        Objects.requireNonNull(appStateUrl, "appStateUrl cannot be null");
-        try (final HttpRequest requestor = new HttpRequest()) {
-            final HttpResponse resp = requestor.sendGetCommand(appStateUrl.toExternalForm());
-            if (resp.getHttpCode() != HttpStatus.OK_200) {
-                throw resp.createException();
-            }
-
-            final String xml = resp.getContent();
-            return DialXmlReader.APPSTATE.fromXML(xml);
-        }
+    public static DialAppState get(String xml) {
+        Validate.notEmpty(xml, "xml cannot be empty");
+        return DialXmlReader.APPSTATE.fromXML(xml);
     }
 }

@@ -27,7 +27,7 @@ import com.thoughtworks.xstream.io.xml.StaxDriver;
  * @param <T> the generic type to cast the XML to
  */
 @NonNullByDefault
-class DialXmlReader<T> {
+public class DialXmlReader<T> {
 
     /** The XStream instance */
     private final XStream xstream = new XStream(new StaxDriver());
@@ -37,7 +37,7 @@ class DialXmlReader<T> {
             new Class[] { DialRoot.class, DialRoot.RootDevice.class, DialClient.class, DialDeviceInfo.class });
 
     /** The reader for the SERVICE XML (see {@link DialService}) */
-    static final DialXmlReader<DialService> SERVICE = new DialXmlReader<>(
+    public static final DialXmlReader<DialService> SERVICE = new DialXmlReader<>(
             new Class[] { DialService.class, DialApp.class, DialApp.SupportedAction.class });
 
     /** The reader for the APP STATE XML (see {@link DialAppState}) */
@@ -62,7 +62,7 @@ class DialXmlReader<T> {
      */
     @SuppressWarnings("unchecked")
     @Nullable
-    T fromXML(String xml) {
+    public T fromXML(String xml) {
         if (StringUtils.isNotEmpty(xml)) {
             return (T) this.xstream.fromXML(xml);
         }

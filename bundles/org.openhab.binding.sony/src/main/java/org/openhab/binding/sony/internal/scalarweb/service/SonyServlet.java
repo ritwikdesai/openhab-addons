@@ -16,7 +16,6 @@ import java.io.IOException;
 import java.net.URL;
 import java.util.Hashtable;
 import java.util.Objects;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 
 import javax.servlet.ServletException;
@@ -34,9 +33,9 @@ import org.openhab.binding.sony.internal.SonyUtil;
 import org.openhab.binding.sony.internal.scalarweb.gson.GsonUtilities;
 import org.openhab.binding.sony.internal.scalarweb.models.ScalarWebRequest;
 import org.openhab.binding.sony.internal.scalarweb.models.ScalarWebResult;
-import org.openhab.binding.sony.internal.scalarweb.transports.ScalarAuthFilter;
-import org.openhab.binding.sony.internal.scalarweb.transports.SonyTransport;
-import org.openhab.binding.sony.internal.scalarweb.transports.SonyTransportFactory;
+import org.openhab.binding.sony.internal.transports.SonyTransport;
+import org.openhab.binding.sony.internal.transports.SonyTransportFactory;
+import org.openhab.binding.sony.internal.transports.TransportOptionAutoAuth;
 import org.osgi.service.component.annotations.Activate;
 import org.osgi.service.component.annotations.Component;
 import org.osgi.service.component.annotations.Deactivate;
@@ -114,7 +113,6 @@ public class SonyServlet extends HttpServlet {
 
     @Deactivate
     public void deactivate() {
-
     }
 
     @Override
@@ -164,27 +162,23 @@ public class SonyServlet extends HttpServlet {
         final SonyTransportFactory factory = new SonyTransportFactory(new URL(baseUrl), gson, webSocketClient,
                 scheduler);
 
-        try (final SonyTransport<ScalarWebRequest> transport = factory.getSonyTransport(serviceName, transportName)) {
+        try (final SonyTransport transport = factory.getSonyTransport(serviceName, transportName)) {
             if (transport == null) {
                 SonyUtil.write(resp, gson.toJson(new CommandResponse(false, "No transport of type: " + transportName)));
                 return;
             } else {
-                transport.addOption(SonyTransport.OPTION_FILTER, ScalarAuthFilter.OPTION_AUTOAUTH);
-
                 final String cmd = "{\"id\":100,\"method\":\"" + command + "\",\"version\":\"" + version
                         + "\",\"params\":[" + parms + "]}";
 
-                try {
-                    final ScalarWebResult result = transport.executeRaw(cmd).get();
-                    if (result.isError()) {
-                        SonyUtil.write(resp, gson.toJson(new CommandResponse(false, result.getDeviceErrorDesc())));
-                    } else {
-                        final JsonArray ja = result.getResults();
-                        final String resString = gson.toJson(ja);
-                        SonyUtil.write(resp, gson.toJson(new CommandResponse(resString)));
-                    }
-                } catch (InterruptedException | ExecutionException e) {
-                    SonyUtil.write(resp, gson.toJson(new CommandResponse(false, e.getMessage())));
+                final ScalarWebRequest rqst = gson.fromJson(cmd, ScalarWebRequest.class);
+                        
+                final ScalarWebResult result = transport.execute(rqst, TransportOptionAutoAuth.TRUE);
+                if (result.isError()) {
+                    SonyUtil.write(resp, gson.toJson(new CommandResponse(false, result.getDeviceErrorDesc())));
+                } else {
+                    final JsonArray ja = result.getResults();
+                    final String resString = gson.toJson(ja);
+                    SonyUtil.write(resp, gson.toJson(new CommandResponse(resString)));
                 }
             }
         }

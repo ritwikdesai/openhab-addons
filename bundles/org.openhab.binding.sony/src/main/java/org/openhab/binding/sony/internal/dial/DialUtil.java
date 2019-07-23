@@ -13,6 +13,7 @@
 package org.openhab.binding.sony.internal.dial;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -44,14 +45,13 @@ public class DialUtil {
      * @param dialApps a non-null, possibly empty list of dial applications
      * @return a non-null, possibly empty list of channels
      */
-    static List<Channel> generateChannels(ThingUID thingUID, List<DialApp> dialApps) {
+    static List<Channel> generateChannels(ThingUID thingUID, Collection<DialApp> dialApps) {
         Objects.requireNonNull(thingUID, "thingUID cannot be null");
         Objects.requireNonNull(dialApps, "dialApps cannot be null");
 
         final Set<String> cachedIds = new HashSet<>();
 
         return dialApps.stream().map(da ->
-
         {
             final List<Channel> channels = new ArrayList<>();
 

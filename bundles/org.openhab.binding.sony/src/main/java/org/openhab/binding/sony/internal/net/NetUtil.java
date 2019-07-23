@@ -63,9 +63,9 @@ public class NetUtil {
      * @param accessCode the access code
      * @return the non-null header
      */
-    public static Header createAuthHeader(int accessCode) {
+    public static Header createAuthHeader(String accessCode) {
         final String authCode = java.util.Base64.getEncoder()
-                .encodeToString((":" + StringUtils.leftPad(Integer.toString(accessCode), 4, "0")).getBytes());
+                .encodeToString((":" + StringUtils.leftPad(accessCode, 4, "0")).getBytes());
         return new Header("Authorization", "Basic " + authCode);
     }
 
@@ -75,25 +75,34 @@ public class NetUtil {
      * @param accessCode the access code
      * @return the non-null header
      */
-    public static Header createAccessCodeHeader(int accessCode) {
-        return new Header("X-Auth-PSK", Integer.toString(accessCode));
+    public static Header createAccessCodeHeader(String accessCode) {
+        return new Header("X-Auth-PSK", accessCode);
     }
 
     /**
-     * Creates the {@link HttpRequest} with the specified headers
-     *
-     * @return the non-null {@link HttpRequest}
+     * Returns the base url (protocol://domain{:port}) for a given url
+     * @param url a non-null URL
+     * @return the base URL
      */
-    public static HttpRequest createHttpRequest() {
-        final HttpRequest httpRequest = new HttpRequest();
+    public static String toBaseUrl(URL url) {
+        Objects.requireNonNull(url, "url cannot be null");
 
-        httpRequest.addHeader("User-Agent", "OpenHab/Sony/Binding");
-        httpRequest.addHeader("X-CERS-DEVICE-INFO", "OpenHab/Sony/Binding");
-        httpRequest.addHeader("Connection", "close");
+        final String protocol = url.getProtocol();
+        final String host = url.getHost();
+        final int port = url.getPort();
 
-        httpRequest.addHeader("X-CERS-DEVICE-ID", getDeviceId());
+        return port == -1 ? String.format("%s://%s", protocol, host)
+                : String.format("%s://%s:%d", protocol, host, port);
+    }
 
-        return httpRequest;
+    public static String getSonyUrl(URL baseUrl, String serviceName) {
+        Objects.requireNonNull(baseUrl, "baseUrl cannot be null");
+        Validate.notEmpty(serviceName, "serviceName cannot be empty");
+
+        final String protocol = baseUrl.getProtocol();
+        final String host = baseUrl.getHost();
+
+        return String.format("%s://%s/sony/%s", protocol, host, serviceName);        
     }
 
     /**

@@ -39,7 +39,7 @@ public class ServiceProtocols {
     /**
      * Instantiates a new gets the service protocols.
      *
-     * @param results the results
+     * @param results the non-null results
      */
     public ServiceProtocols(ScalarWebResult results) {
         Objects.requireNonNull(results, "results cannot be null");

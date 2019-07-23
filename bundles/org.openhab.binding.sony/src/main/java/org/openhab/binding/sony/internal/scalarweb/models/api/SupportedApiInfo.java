@@ -16,26 +16,43 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
+import org.apache.commons.lang.Validate;
 import org.eclipse.jdt.annotation.NonNullByDefault;
 import org.eclipse.jdt.annotation.Nullable;
 import org.openhab.binding.sony.internal.scalarweb.VersionUtilities;
+import org.openhab.binding.sony.internal.scalarweb.gson.SupportedApiInfoDeserializer;
 
 /**
- *
+ * This class represents a supported API and all the version information for it. This will be used in deserialization
+ * and in serialization via {@link SupportedApiInfoDeserializer}
  *
  * @author Tim Roberts - Initial contribution
  */
 @NonNullByDefault
 public class SupportedApiInfo {
-    final String name;
+    /** the API name */
+    private final String name;
+
+    /** The map of version information by version number */
     private final Map<String, SupportedApiVersionInfo> versions;
 
+    /** The latest version (if found) */
     private final @Nullable SupportedApiVersionInfo latestVersion;
 
+    /**
+     * Constructs the supported API via the parameters
+     * 
+     * @param name     a non-null, non-empty name
+     * @param versions a non-null, possibly empty list of versions
+     */
     public SupportedApiInfo(String name, List<SupportedApiVersionInfo> versions) {
+        Validate.notEmpty(name, "name cannot be empty");
+        Objects.requireNonNull(versions, "versions cannot be null");
+
         this.name = name;
         this.versions = Collections
                 .unmodifiableMap(versions.stream().collect(Collectors.toMap(k -> k.version, v -> v)));
@@ -55,18 +72,40 @@ public class SupportedApiInfo {
         this.latestVersion = latest.isPresent() ? latest.get() : null;
     }
 
+    /**
+     * Returns the API name
+     * 
+     * @return a non-null, non-empty name
+     */
     public String getName() {
         return name;
     }
 
+    /**
+     * Returns the versions
+     * 
+     * @return a non-null, possibly emtpy collection of version info
+     */
     public Collection<SupportedApiVersionInfo> getVersions() {
         return versions.values();
     }
 
+    /**
+     * Get's the version info for the given version (or null if not found)
+     * 
+     * @param version a non-null, possibly empty version
+     * @return the version info if found, null if not
+     */
     public @Nullable SupportedApiVersionInfo getVersions(String version) {
+        Objects.requireNonNull(version, "version cannot be null");
         return versions.get(version);
     }
 
+    /**
+     * Get's the latest version for the API or null if there is none
+     * 
+     * @return the latest version info or null if none
+     */
     public @Nullable SupportedApiVersionInfo getLatestVersion() {
         return latestVersion;
     }

@@ -37,6 +37,7 @@ import org.eclipse.smarthome.core.thing.binding.ThingTypeProvider;
 import org.eclipse.smarthome.core.thing.type.ChannelGroupType;
 import org.eclipse.smarthome.core.thing.type.ChannelGroupTypeProvider;
 import org.eclipse.smarthome.core.thing.type.ChannelGroupTypeUID;
+import org.eclipse.smarthome.core.thing.type.ChannelTypeUID;
 import org.eclipse.smarthome.core.thing.type.DynamicStateDescriptionProvider;
 import org.eclipse.smarthome.core.thing.type.ThingType;
 import org.eclipse.smarthome.core.thing.type.ThingTypeRegistry;
@@ -231,29 +232,28 @@ public class SonyDefinitionProviderImpl
                 // If anything is specified, create a new state description and go with it
                 if (min != null || max != null || step != null || pattern != null || readonly != null
                         || (options != null && options.size() > 0)) {
-                            StateDescriptionFragmentBuilder bld = StateDescriptionFragmentBuilder.create();
-                            if (min != null) {
-                                bld = bld.withMinimum(min);
-                            }
-                            if (max != null) {
-                                bld = bld.withMaximum(max);
-                            }
-                            if (step != null) {
-                                bld = bld.withStep(step);
-                            }
-                            if (pattern != null) {
-                                bld = bld.withPattern(pattern);
-                            }
-                            if (readonly != null) {
-                                bld = bld.withReadOnly(readonly);
-                            }
-                            if (options.size() > 0) {
-                                bld = bld.withOptions(options);
-                            }
-                            return bld.build().toStateDescription();
-                        }
-                    
-                
+                    StateDescriptionFragmentBuilder bld = StateDescriptionFragmentBuilder.create();
+                    if (min != null) {
+                        bld = bld.withMinimum(min);
+                    }
+                    if (max != null) {
+                        bld = bld.withMaximum(max);
+                    }
+                    if (step != null) {
+                        bld = bld.withStep(step);
+                    }
+                    if (pattern != null) {
+                        bld = bld.withPattern(pattern);
+                    }
+                    if (readonly != null) {
+                        bld = bld.withReadOnly(readonly);
+                    }
+                    if (options.size() > 0) {
+                        bld = bld.withOptions(options);
+                    }
+                    return bld.build().toStateDescription();
+                }
+
             }
         }
         return originalStateDescription;
@@ -297,9 +297,14 @@ public class SonyDefinitionProviderImpl
         // Get the state channel that have a type (with no mapping)
         // ignore null warning as the filter makes sure it's not null
         final List<SonyThingChannelDefinition> chls = thing.getChannels().stream().filter(channelFilter)
-                .filter(chl -> chl.getChannelTypeUID() != null)
-                .map(chl -> new SonyThingChannelDefinition(chl.getUID().getId(), null, chl.getChannelTypeUID().getId(),
-                        new SonyThingStateDefinition(getStateDescription(chl, null, null)), chl.getProperties()))
+                .map(chl -> {
+                    final ChannelTypeUID ctuid = chl.getChannelTypeUID();
+                    return ctuid == null ? null : 
+                        new SonyThingChannelDefinition(chl.getUID().getId(), null, ctuid.getId(),
+                                    new SonyThingStateDefinition(getStateDescription(chl, null, null)),
+                                    chl.getProperties());
+                })
+                .filter(chl -> chl != null)
                 .collect(Collectors.toList());
 
         final String label = thing.getLabel() == null || StringUtils.isEmpty(thing.getLabel()) ? thingType.getLabel()
@@ -313,7 +318,7 @@ public class SonyDefinitionProviderImpl
 
         // hardcoded service groups for now
         final SonyThingDefinition ttd = new SonyThingDefinition(service, configUri, modelName, "Sony " + label,
-                desc == null || StringUtils.isEmpty(desc) ? label : desc, ScalarWebService.getServiceMap(), chls);
+                desc == null || StringUtils.isEmpty(desc) ? label : desc, ScalarWebService.getServiceLabels(), chls);
 
         for (SonySource src : sources) {
             src.writeThingDefinition(ttd);

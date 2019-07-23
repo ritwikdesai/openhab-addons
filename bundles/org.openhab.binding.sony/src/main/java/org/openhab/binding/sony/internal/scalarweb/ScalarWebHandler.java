@@ -42,6 +42,7 @@ import org.eclipse.smarthome.core.types.Command;
 import org.eclipse.smarthome.core.types.RefreshType;
 import org.eclipse.smarthome.core.types.State;
 import org.openhab.binding.sony.internal.AbstractThingHandler;
+import org.openhab.binding.sony.internal.AccessCheckResult;
 import org.openhab.binding.sony.internal.SonyBindingConstants;
 import org.openhab.binding.sony.internal.SonyUtil;
 import org.openhab.binding.sony.internal.ThingCallback;
@@ -203,10 +204,10 @@ public class ScalarWebHandler extends AbstractThingHandler<ScalarWebConfig> {
             final ScalarWebLoginProtocol<ThingCallback<String>> loginHandler = new ScalarWebLoginProtocol<>(client,
                     config, callback, transformationService);
 
-            final String msg = loginHandler.login();
+            final AccessCheckResult result = loginHandler.login();
             SonyUtil.checkInterrupt();
 
-            if (msg == null) {
+            if (result == AccessCheckResult.OK) {
                 final ScalarWebProtocolFactory<ThingCallback<String>> factory = new ScalarWebProtocolFactory<>(context,
                         client, callback);
 
@@ -234,11 +235,10 @@ public class ScalarWebHandler extends AbstractThingHandler<ScalarWebConfig> {
                 // Note: there are other access code type errors that probably should be trapped here
                 // as well - but those are the major two (probably represent 99% of the cases)
                 // and we handle them separately
-                if (StringUtils.equalsIgnoreCase(msg, ScalarWebConstants.ACCESSCODE_PENDING)
-                        || StringUtils.equalsIgnoreCase(msg, ScalarWebConstants.ACCESSCODE_NOTACCEPTED)) {
-                    updateStatus(ThingStatus.OFFLINE, ThingStatusDetail.CONFIGURATION_ERROR, msg);
+                if (result == AccessCheckResult.PENDING || result == AccessCheckResult.NOTACCEPTED) {
+                    updateStatus(ThingStatus.OFFLINE, ThingStatusDetail.CONFIGURATION_ERROR, result.getMsg());
                 } else {
-                    updateStatus(ThingStatus.OFFLINE, ThingStatusDetail.COMMUNICATION_ERROR, msg);
+                    updateStatus(ThingStatus.OFFLINE, ThingStatusDetail.COMMUNICATION_ERROR, result.getMsg());
                 }
             }
         } catch (InterruptedException e) {

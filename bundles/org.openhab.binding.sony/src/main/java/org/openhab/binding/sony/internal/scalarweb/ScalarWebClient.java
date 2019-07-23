@@ -22,10 +22,10 @@ import org.apache.commons.lang.Validate;
 import org.eclipse.jdt.annotation.NonNullByDefault;
 import org.eclipse.jdt.annotation.Nullable;
 import org.eclipse.jetty.http.HttpStatus;
-import org.openhab.binding.sony.internal.net.HttpRequest;
 import org.openhab.binding.sony.internal.net.HttpResponse;
-import org.openhab.binding.sony.internal.net.NetUtil;
 import org.openhab.binding.sony.internal.scalarweb.models.ScalarWebService;
+import org.openhab.binding.sony.internal.transports.SonyTransport;
+import org.openhab.binding.sony.internal.transports.SonyTransportFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.w3c.dom.DOMException;
@@ -65,8 +65,8 @@ public class ScalarWebClient implements AutoCloseable {
         Validate.notEmpty(scalarWebUrl, "scalarWebUrl cannot be empty");
         Objects.requireNonNull(context, "context cannot be null");
 
-        try (HttpRequest requestor = NetUtil.createHttpRequest()) {
-            final HttpResponse resp = requestor.sendGetCommand(scalarWebUrl);
+        try (SonyTransport transport = SonyTransportFactory.createHttpTransport(scalarWebUrl)) {
+            final HttpResponse resp = transport.executeGet(scalarWebUrl);
 
             if (resp.getHttpCode() == HttpStatus.OK_200) {
                 final Document scalarWebDocument = resp.getContentAsXml();

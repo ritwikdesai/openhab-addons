@@ -40,6 +40,7 @@ import org.eclipse.smarthome.core.thing.ThingStatus;
 import org.eclipse.smarthome.core.thing.ThingStatusDetail;
 import org.eclipse.smarthome.core.transform.TransformationException;
 import org.eclipse.smarthome.core.transform.TransformationService;
+import org.openhab.binding.sony.internal.SonyUtil;
 import org.openhab.binding.sony.internal.ThingCallback;
 import org.openhab.binding.sony.internal.net.NetUtil;
 import org.openhab.binding.sony.internal.net.SocketChannelSession;
@@ -404,8 +405,9 @@ class SimpleIpProtocol implements SocketSessionListener, AutoCloseable {
 
         String code = irCmd;
         try {
-            if (transformService != null && cmdMap != null) {
-                code = transformService.transform(cmdMap, irCmd);
+            final TransformationService localTransformationService = transformService;
+            if (localTransformationService != null && cmdMap != null) {
+                code = localTransformationService.transform(cmdMap, irCmd);
                 if (!StringUtils.equalsIgnoreCase(code, irCmd)) {
                     logger.debug("Transformed {} with map file '{}' to {}", irCmd, cmdMap, code);
                 }
@@ -440,17 +442,7 @@ class SimpleIpProtocol implements SocketSessionListener, AutoCloseable {
      */
     void setPower(boolean on) {
         if (on) {
-            final String ipAddress = config.getDeviceIpAddress();
-            final String macAddress = config.getDeviceMacAddress();
-            if (macAddress != null && StringUtils.isNotEmpty(macAddress) && ipAddress != null
-                    && StringUtils.isNotEmpty(ipAddress)) {
-                try {
-                    logger.debug("Sending WOL packet to {} ({})", macAddress, ipAddress);
-                    NetUtil.sendWol(ipAddress, macAddress);
-                } catch (IOException e) {
-                    logger.debug("IOException during sending of WOL packet - ignored: {}", e.getMessage());
-                }
-            }
+            SonyUtil.sendWakeOnLan(logger, config.getDeviceIpAddress(), config.getDeviceMacAddress());
         }
         sendCommand(TYPE_CONTROL, POWER, StringUtils.leftPad(on ? "1" : "0", PARMSIZE, '0'));
     }

@@ -79,7 +79,7 @@ export default class DefinitionModule {
   public actions: any = {
     runCommand(context: any) {
       context.commit('showResults', 'waiting...');
-      axios.post('app/execute', {
+      axios.post('/sony/app/execute', {
         baseUrl: context.state.currMethod.baseUrl,
         serviceName: context.state.currMethod.service,
         transport: context.state.currMethod.transport,

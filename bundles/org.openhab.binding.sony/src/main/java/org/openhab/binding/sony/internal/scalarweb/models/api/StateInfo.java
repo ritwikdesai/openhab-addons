@@ -20,15 +20,27 @@ import org.eclipse.jdt.annotation.Nullable;
  * @author Tim Roberts - Initial contribution
  */
 public class StateInfo {
+    /** The static field for the Stopped state */
     public static final String STOPPED = "stopped";
 
+    /** The current state */
     private @Nullable String state;
+
+    /** The current state supplemental information */
     private @Nullable String supplement;
 
+    /**
+     * Returns the current state
+     * @return the current state
+     */
     public @Nullable String getState() {
         return state;
     }
 
+    /**
+     * Returns the current state supplemental information
+     * @return the current state supplemental information
+     */
     public @Nullable String getSupplement() {
         return supplement;
     }

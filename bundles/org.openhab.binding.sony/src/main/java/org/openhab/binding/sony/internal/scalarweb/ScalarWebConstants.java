@@ -59,7 +59,4 @@ public class ScalarWebConstants {
 
     // The config URI for creating thing types
     public static final String CFG_URI = "thing-type:sony:scalarconfig";
-
-    // The timeout (in seconds) to wait on a response
-    public static final Integer RSP_WAIT_TIMEOUTSECONDS = 10;
 }

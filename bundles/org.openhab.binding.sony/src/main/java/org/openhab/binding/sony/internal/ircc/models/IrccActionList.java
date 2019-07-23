@@ -67,8 +67,10 @@ class IrccActionList {
     @Nullable
     String getUrlForAction(String actionName) {
         Validate.notEmpty(actionName, "actionName cannot be empty");
-        if (actions != null) {
-            for (IrccAction action : actions) {
+
+        final List<@Nullable IrccAction> localActions = actions;
+        if (localActions != null) {
+            for (IrccAction action : localActions) {
                 if (action != null && StringUtils.equalsIgnoreCase(actionName, action.getName())) {
                     return action.getUrl();
                 }
@@ -83,8 +85,9 @@ class IrccActionList {
      * @return the registration mode (should but not guaranteed to be >= 0)
      */
     public int getRegistrationMode() {
-        if (actions != null) {
-            for (IrccAction action : actions) {
+        final List<@Nullable IrccAction> localActions = actions;
+        if (localActions != null) {
+            for (IrccAction action : localActions) {
                 if (action != null && StringUtils.isNotEmpty(action.getMode())
                         && StringUtils.equalsIgnoreCase(IrccAction.REGISTER, action.getName())) {
                     try {
@@ -134,14 +137,27 @@ class IrccActionList {
         @XStreamAsAttribute
         private @Nullable String mode;
 
+        /**
+         * Get's the name of the action
+         * 
+         * @return a possibly null, possibly empty name
+         */
         public @Nullable String getName() {
             return name;
         }
 
+        /**
+         * Get's the registration mode
+         * @return a possibly null, possibly empty registration mode
+         */
         public @Nullable String getMode() {
             return mode;
         }
 
+        /**
+         * Get's the action URL
+         * @return a possibly null, possibly empty action url
+         */
         public @Nullable String getUrl() {
             return url;
         }

@@ -16,8 +16,10 @@ import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 
 import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang.Validate;
 import org.eclipse.jdt.annotation.NonNullByDefault;
 import org.eclipse.jdt.annotation.Nullable;
 
@@ -192,21 +194,31 @@ public class AbstractConfig {
 
         props.put("deviceAddress", SonyUtil.convertNull(deviceAddress, ""));
         props.put("deviceMacAddress", SonyUtil.convertNull(deviceMacAddress, ""));
+        conditionallyAddProperty(props, "refresh", refresh);
+        conditionallyAddProperty(props, "retryPolling", retryPolling);
+        conditionallyAddProperty(props, "checkStatusPolling", checkStatusPolling);
 
-        final Integer localRefresh = refresh;
-        if (localRefresh != null) {
-            props.put("refresh", localRefresh);
-        }
-
-        final Integer localRetryPolling = retryPolling;
-        if (localRetryPolling != null) {
-            props.put("retryPolling", localRetryPolling);
-        }
-
-        final Integer localCheckStatusPolling = checkStatusPolling;
-        if (localCheckStatusPolling != null) {
-            props.put("checkStatusPolling", localCheckStatusPolling);
-        }
         return props;
+    }
+
+    /**
+     * Conditionally adds a property to the property map if the property is not null (or empty if a string)
+     * @param props a non-null, possibly empty property map
+     * @param propName a non-null, non-empty property name
+     * @param propValue a possibly null, possibly empty (if string) property value
+     */
+    protected void conditionallyAddProperty(Map<String, Object> props, String propName, @Nullable Object propValue) {
+        Objects.requireNonNull(props, "props cannot be null");
+        Validate.notEmpty(propName, "propName cannot be empty");
+        
+        if (propValue == null) {
+            return;
+        }
+
+        if (propValue instanceof String && StringUtils.isEmpty((String) propValue)) {
+            return;
+        }
+
+        props.put(propName, propValue);
     }
 }

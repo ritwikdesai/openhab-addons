@@ -12,7 +12,10 @@
  */
 package org.openhab.binding.sony.internal.dial;
 
+import java.util.Map;
+
 import org.eclipse.jdt.annotation.NonNullByDefault;
+import org.eclipse.jdt.annotation.Nullable;
 import org.openhab.binding.sony.internal.AbstractConfig;
 
 /**
@@ -22,4 +25,31 @@ import org.openhab.binding.sony.internal.AbstractConfig;
  */
 @NonNullByDefault
 public class DialConfig extends AbstractConfig {
+    /** The access code */
+    private @Nullable String accessCode;
+
+    /**
+     * Gets the access code
+     *
+     * @return the access code
+     */
+    public @Nullable String getAccessCode() {
+        return accessCode;
+    }
+
+    /**
+     * Sets the access code.
+     *
+     * @param accessCode the new access code
+     */
+    public void setAccessCode(String accessCode) {
+        this.accessCode = accessCode;
+    }
+
+    @Override
+    public Map<String, Object> asProperties() {
+        final Map<String, Object> props = super.asProperties();
+        conditionallyAddProperty(props, "accessCode", accessCode);
+        return props;
+    }
 }

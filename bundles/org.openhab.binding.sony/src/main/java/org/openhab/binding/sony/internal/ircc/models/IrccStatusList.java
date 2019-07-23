@@ -66,8 +66,9 @@ public class IrccStatusList {
      * @return true if a text input, false otherwise
      */
     public boolean isTextInput() {
-        if (statuses != null) {
-            for (IrccStatus status : statuses) {
+        final List<@Nullable IrccStatus> localStatuses = statuses;
+        if (localStatuses != null) {
+            for (IrccStatus status : localStatuses) {
                 if (status != null && StringUtils.equalsIgnoreCase(IrccStatus.TEXTINPUT, status.getName())) {
                     return true;
                 }
@@ -82,8 +83,9 @@ public class IrccStatusList {
      * @return true if a web browser, false otherwise
      */
     public boolean isWebBrowse() {
-        if (statuses != null) {
-            for (IrccStatus status : statuses) {
+        final List<@Nullable IrccStatus> localStatuses = statuses;
+        if (localStatuses != null) {
+            for (IrccStatus status : localStatuses) {
                 if (status != null && StringUtils.equalsIgnoreCase(IrccStatus.WEBBROWSER, status.getName())) {
                     return true;
                 }
@@ -98,8 +100,9 @@ public class IrccStatusList {
      * @return true if a disk, false otherwise
      */
     public boolean isDisk() {
-        if (statuses != null) {
-            for (IrccStatus status : statuses) {
+        final List<@Nullable IrccStatus> localStatuses = statuses;
+        if (localStatuses != null) {
+            for (IrccStatus status : localStatuses) {
                 if (status != null && StringUtils.equalsIgnoreCase(IrccStatus.DISC, status.getName())) {
                     return true;
                 }
@@ -114,8 +117,9 @@ public class IrccStatusList {
      * @return the possibly null (if not {@link IrccStatus#VIEWING}) {@link IrccStatus}
      */
     public @Nullable IrccStatus getViewing() {
-        if (statuses != null) {
-            for (IrccStatus status : statuses) {
+        final List<@Nullable IrccStatus> localStatuses = statuses;
+        if (localStatuses != null) {
+            for (IrccStatus status : localStatuses) {
                 if (status != null && StringUtils.equalsIgnoreCase(IrccStatus.VIEWING, status.getName())) {
                     return status;
                 }

@@ -32,4 +32,12 @@ public class SeekBroadcastStation_1_0 {
         direction = fwd ? DIR_FWD : DIR_BWD;
         tuning = autoTune ? TUN_AUTO : TUN_MANUAL;
     }
+
+    public String getDirection() {
+        return direction;
+    }
+
+    public String getTuning() {
+        return tuning;
+    }
 }

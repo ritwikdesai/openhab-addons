@@ -10,7 +10,7 @@
  *
  * SPDX-License-Identifier: EPL-2.0
  */
-package org.openhab.binding.sony.internal.scalarweb.transports;
+package org.openhab.binding.sony.internal.transports;
 
 import org.eclipse.jdt.annotation.NonNullByDefault;
 import org.openhab.binding.sony.internal.scalarweb.models.ScalarWebEvent;

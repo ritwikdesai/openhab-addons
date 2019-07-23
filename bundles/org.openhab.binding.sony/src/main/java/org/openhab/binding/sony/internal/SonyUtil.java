@@ -36,6 +36,7 @@ import org.eclipse.smarthome.core.library.types.PercentType;
 import org.eclipse.smarthome.core.library.types.StringType;
 import org.eclipse.smarthome.core.types.State;
 import org.eclipse.smarthome.core.types.UnDefType;
+import org.openhab.binding.sony.internal.net.NetUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -287,6 +288,24 @@ public class SonyUtil {
         return ingr == null ? defValue : ingr.toString();
     }
 
+        /**
+     * Performs a WOL if there is a configured ip address and mac address
+     */
+    public static void sendWakeOnLan(Logger logger, String deviceIpAddress, String deviceMacAddress) {
+        if (deviceIpAddress != null && deviceMacAddress != null && StringUtils.isNotBlank(deviceIpAddress)
+                && StringUtils.isNotBlank(deviceMacAddress)) {
+            try {
+                NetUtil.sendWol(deviceIpAddress, deviceMacAddress);
+                logger.debug("WOL packet sent to {}", deviceMacAddress);
+            } catch (IOException e) {
+                logger.warn("Exception occurred sending WOL packet to {}: {}", deviceMacAddress, e);
+            }
+        } else {
+            logger.debug(
+                    "WOL packet is not supported - specify the IP address and mac address in config if you want a WOL packet sent");
+        }
+    }
+    
     /**
      * Creates a folder if it doesn't already exist
      *

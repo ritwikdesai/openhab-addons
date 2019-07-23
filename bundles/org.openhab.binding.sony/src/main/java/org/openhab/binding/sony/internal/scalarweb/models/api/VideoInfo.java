@@ -22,8 +22,13 @@ import org.eclipse.jdt.annotation.Nullable;
  */
 @NonNullByDefault
 public class VideoInfo {
+    /** The video codec */
     private @Nullable String codec;
 
+    /**
+     * Returns the video codec
+     * @return the video codec
+     */
     public @Nullable String getCodec() {
         return codec;
     }
