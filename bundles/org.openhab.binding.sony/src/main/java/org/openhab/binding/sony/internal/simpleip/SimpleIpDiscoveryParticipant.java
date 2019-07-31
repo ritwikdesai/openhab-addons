@@ -103,9 +103,8 @@ public class SimpleIpDiscoveryParticipant extends AbstractDiscoveryParticipant i
         config.setDeviceMacAddress(getMacAddress(identity, uid));
         config.setCommandsMapFile("simpleip-" + uid.getId() + ".map");
 
-        DiscoveryResult result = DiscoveryResultBuilder.create(uid).withProperties(config.asProperties())
-                .withLabel(getLabel(device)).build();
-        return result;
+        return DiscoveryResultBuilder.create(uid).withProperties(config.asProperties())
+                .withLabel(getLabel(device, "Simple IP")).build();
     }
 
     @Override

@@ -186,7 +186,7 @@ class DialProtocol<T extends ThingCallback<String>> implements AutoCloseable {
         } else {
             final HttpResponse resp = start ? transport.executePostXml(urr.toString(), "")
                     : transport.executeDelete(urr.toString());
-            if (resp.getHttpCode() != HttpStatus.SERVICE_UNAVAILABLE_503) {
+            if (resp.getHttpCode() == HttpStatus.SERVICE_UNAVAILABLE_503) {
                 logger.debug("Cannot start {}, another application is currently running.", applId);
             } else if (resp.getHttpCode() != HttpStatus.CREATED_201) {
                 logger.debug("Error setting the 'state' of the application: {}", resp.getHttpCode());

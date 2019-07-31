@@ -145,12 +145,15 @@ public abstract class AbstractDiscoveryParticipant {
      * Gets the label from the remote device
      *
      * @param device a non-null, non-empty device
+     * @param suffix a non-null, non-empty suffix
      * @return the label for the device
      */
-    protected static String getLabel(RemoteDevice device) {
+    protected static String getLabel(RemoteDevice device, String suffix) {
         Objects.requireNonNull(device, "device cannot be null");
-        return StringUtils.isEmpty(device.getDetails().getFriendlyName()) ? device.getDisplayString()
-                : device.getDetails().getFriendlyName();
+        Validate.notEmpty(suffix, "suffix cannot be empty");
+        
+        return (StringUtils.isEmpty(device.getDetails().getFriendlyName()) ? device.getDisplayString()
+                : device.getDetails().getFriendlyName()) + " " + suffix;
     }
 
     /**

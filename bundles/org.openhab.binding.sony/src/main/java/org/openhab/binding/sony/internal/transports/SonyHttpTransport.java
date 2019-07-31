@@ -18,8 +18,6 @@ import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 
 import com.google.gson.Gson;
-
-import org.apache.commons.lang.Validate;
 import org.eclipse.jdt.annotation.NonNullByDefault;
 import org.openhab.binding.sony.internal.net.Header;
 import org.openhab.binding.sony.internal.net.HttpRequest;
@@ -139,7 +137,7 @@ public class SonyHttpTransport extends AbstractSonyTransport {
     private CompletableFuture<TransportResultHttpResponse> executePostJson(TransportPayloadHttp request,
             TransportOption... options) {
         final String payload = request.getPayload();
-        Validate.notEmpty(payload, "payload cannot be empty");
+        Objects.requireNonNull(payload, "payload cannot be null"); // may be empty however
 
         final Header[] headers = getHeaders(options);
 
@@ -152,7 +150,7 @@ public class SonyHttpTransport extends AbstractSonyTransport {
         Objects.requireNonNull(request, "request cannot be null");
 
         final String payload = request.getPayload();
-        Validate.notEmpty(payload, "payload cannot be empty");
+        Objects.requireNonNull(payload, "payload cannot be null"); // may be empty however
 
         final Header[] headers = getHeaders(options);
         return CompletableFuture.completedFuture(new TransportResultHttpResponse(

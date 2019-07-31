@@ -139,7 +139,9 @@ public class ScalarWebHandler extends AbstractThingHandler<ScalarWebConfig> {
 
             @Override
             public void setProperty(String propertyName, String propertyValue) {
-                getThing().setProperty(propertyName, propertyValue);
+                if (propertyValue != null && StringUtils.isNotEmpty(propertyValue)) {
+                    getThing().setProperty(propertyName, propertyValue);
+                }
             }
         };
 

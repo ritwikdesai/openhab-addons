@@ -179,7 +179,7 @@ public class ScalarWebDiscoveryParticipant extends AbstractDiscoveryParticipant 
      * @param irccUrl a possibly null, possibly empty irccurl
      * @return a non-null result
      */
-    private static DiscoveryResult createResult(RemoteDevice device, ThingUID uid, @Nullable String irccUrl) {
+    private DiscoveryResult createResult(RemoteDevice device, ThingUID uid, @Nullable String irccUrl) {
         Objects.requireNonNull(device, "device cannot be null");
         Objects.requireNonNull(uid, "uid cannot be null");
 
@@ -192,9 +192,14 @@ public class ScalarWebDiscoveryParticipant extends AbstractDiscoveryParticipant 
         config.setDeviceAddress(scalarURL.toString());
         config.setIrccUrl(irccUrl == null ? "" : irccUrl);
 
-        final DiscoveryResult result = DiscoveryResultBuilder.create(uid).withProperties(config.asProperties())
-                .withLabel(getLabel(device)).build();
-        return result;
+        DiscoveryResultBuilder resultBuilder = DiscoveryResultBuilder.create(uid).withProperties(config.asProperties())
+                .withLabel(getLabel(device, "Scalar"));
+        final String modelName = getModelName(device);
+        if (modelName != null && StringUtils.isNotEmpty(modelName)) {
+            resultBuilder = resultBuilder.withProperty(ScalarWebConstants.PROP_MODEL, modelName);
+        }
+
+        return resultBuilder.build();
     }
 
     /**

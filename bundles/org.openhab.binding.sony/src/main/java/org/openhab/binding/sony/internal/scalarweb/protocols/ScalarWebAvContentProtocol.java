@@ -1461,9 +1461,9 @@ class ScalarWebAvContentProtocol<T extends ThingCallback<String>> extends Abstra
     private void notifyContentListResult(ContentListResult_1_2 clr) {
         // Set everything to undefined except for uri, index, childcount and selected
 
-        stateChanged(CN_AUDIOCHANNEL, SonyUtil.newStringType(String.join(",", clr.getAudioChannel())));
-        stateChanged(CN_AUDIOCODEC, SonyUtil.newStringType(String.join(",", clr.getAudioCodec())));
-        stateChanged(CN_AUDIOFREQUENCY, SonyUtil.newStringType(String.join(",", clr.getAudioFrequency())));
+        stateChanged(CN_AUDIOCHANNEL, SonyUtil.newStringType(StringUtils.join(clr.getAudioChannel(), ',')));
+        stateChanged(CN_AUDIOCODEC, SonyUtil.newStringType(StringUtils.join(clr.getAudioCodec(), ',')));
+        stateChanged(CN_AUDIOFREQUENCY, SonyUtil.newStringType(StringUtils.join(clr.getAudioFrequency(), ',')));
 
         stateChanged(CN_CHANNELNAME, SonyUtil.newStringType(clr.getChannelName()));
 
@@ -1485,9 +1485,9 @@ class ScalarWebAvContentProtocol<T extends ThingCallback<String>> extends Abstra
                 SonyUtil.newStringType(Boolean.toString(BooleanUtils.toBoolean(clr.isProtected()))));
         stateChanged(CN_ORIGINALDISPNUM, SonyUtil.newStringType(clr.getOriginalDispNum()));
 
-        stateChanged(CN_PARENTALCOUNTRY, SonyUtil.newStringType(String.join(",", clr.getParentalCountry())));
-        stateChanged(CN_PARENTALRATING, SonyUtil.newStringType(String.join(",", clr.getParentalRating())));
-        stateChanged(CN_PARENTALSYSTEM, SonyUtil.newStringType(String.join(",", clr.getParentalSystem())));
+        stateChanged(CN_PARENTALCOUNTRY, SonyUtil.newStringType(StringUtils.join(clr.getParentalCountry(), ',')));
+        stateChanged(CN_PARENTALRATING, SonyUtil.newStringType(StringUtils.join(clr.getParentalRating(), ',')));
+        stateChanged(CN_PARENTALSYSTEM, SonyUtil.newStringType(StringUtils.join(clr.getParentalSystem(), ',')));
 
         stateChanged(CN_PRODUCTID, SonyUtil.newStringType(clr.getProductID()));
         stateChanged(CN_PROGRAMMEDIATYPE, SonyUtil.newStringType(clr.getProgramMediaType()));
@@ -1497,8 +1497,8 @@ class ScalarWebAvContentProtocol<T extends ThingCallback<String>> extends Abstra
         stateChanged(CN_STARTDATETIME, SonyUtil.newStringType(clr.getStartDateTime()));
         stateChanged(CN_STORAGEURI, SonyUtil.newStringType(clr.getStorageUri()));
 
-        stateChanged(CN_SUBTITLELANGUAGE, SonyUtil.newStringType(String.join(",", clr.getSubtitleLanguage())));
-        stateChanged(CN_SUBTITLETITLE, SonyUtil.newStringType(String.join(",", clr.getSubtitleTitle())));
+        stateChanged(CN_SUBTITLELANGUAGE, SonyUtil.newStringType(StringUtils.join(clr.getSubtitleLanguage(), ',')));
+        stateChanged(CN_SUBTITLETITLE, SonyUtil.newStringType(StringUtils.join(clr.getSubtitleTitle(), ',')));
 
         stateChanged(CN_TITLE, SonyUtil.newStringType(clr.getTitle()));
         stateChanged(CN_TRIPLETSTR, SonyUtil.newStringType(clr.getTripletStr()));
@@ -2108,7 +2108,7 @@ class ScalarWebAvContentProtocol<T extends ThingCallback<String>> extends Abstra
         }
 
         if (!sources.isEmpty()) {
-            stateChanged(SOURCES, SonyUtil.newStringType(String.join(",", sources)));
+            stateChanged(SOURCES, SonyUtil.newStringType(StringUtils.join(sources, ',')));
         }
     }
 

@@ -209,11 +209,13 @@ public class DialHandler extends AbstractThingHandler<DialConfig> {
         if (protocol != null) {
             getThing().getChannels().stream().forEach(chn -> {
                 final String channelId = chn.getUID().getId();
-                final String applId = chn.getProperties().get(DialConstants.CHANNEL_PROP_APPLID);
-                if (StringUtils.isEmpty(applId)) {
-                    logger.warn("Unknown application id for channel {}", channelId);
-                } else {
-                    protocol.refreshState(channelId, applId);
+                if (StringUtils.endsWithIgnoreCase(channelId, DialConstants.CHANNEL_STATE)) {
+                    final String applId = chn.getProperties().get(DialConstants.CHANNEL_PROP_APPLID);
+                    if (StringUtils.isEmpty(applId)) {
+                        logger.warn("Unknown application id for channel {}", channelId);
+                    } else {
+                        protocol.refreshState(channelId, applId);
+                    }
                 }
             });
         }

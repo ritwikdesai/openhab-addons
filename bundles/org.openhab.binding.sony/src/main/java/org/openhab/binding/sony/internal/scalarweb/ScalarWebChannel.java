@@ -323,6 +323,6 @@ public class ScalarWebChannel {
 
     @Override
     public String toString() {
-        return getChannelId() + " (cid=" + id + ", ctgy=" + category + ", path=" + String.join(",", paths) + ")";
+        return getChannelId() + " (cid=" + id + ", ctgy=" + category + ", path=" + StringUtils.join(paths, ',') + ")";
     }
 }

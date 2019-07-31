@@ -91,9 +91,8 @@ public class DialDiscoveryParticipant extends AbstractDiscoveryParticipant imple
         config.setDeviceMacAddress(macAddress);
         config.setDeviceAddress(dialURL.toString());
 
-        final DiscoveryResult result = DiscoveryResultBuilder.create(uid).withProperties(config.asProperties())
-                .withLabel(getLabel(device)).build();
-        return result;
+        return DiscoveryResultBuilder.create(uid).withProperties(config.asProperties())
+                .withLabel(getLabel(device, "DIAL")).build();
     }
 
     @Override
