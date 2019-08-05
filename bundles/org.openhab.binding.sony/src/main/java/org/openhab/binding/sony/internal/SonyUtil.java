@@ -288,10 +288,17 @@ public class SonyUtil {
         return ingr == null ? defValue : ingr.toString();
     }
 
-        /**
-     * Performs a WOL if there is a configured ip address and mac address
+    /**
+     * Performs a WOL if there is a configured ip address and mac address.  If either ip address or mac address is null/empty, call is ignored
+     * 
+     * @param logger the non-null logger to log messages to
+     * @param deviceIpAddress the possibly null, possibly empty device ip address
+     * @param deviceMacAddress the possibly null, possibly empty device mac address
      */
-    public static void sendWakeOnLan(Logger logger, String deviceIpAddress, String deviceMacAddress) {
+    public static void sendWakeOnLan(Logger logger, @Nullable String deviceIpAddress,
+            @Nullable String deviceMacAddress) {
+        Objects.requireNonNull(logger, "logger cannot be null");
+
         if (deviceIpAddress != null && deviceMacAddress != null && StringUtils.isNotBlank(deviceIpAddress)
                 && StringUtils.isNotBlank(deviceMacAddress)) {
             try {

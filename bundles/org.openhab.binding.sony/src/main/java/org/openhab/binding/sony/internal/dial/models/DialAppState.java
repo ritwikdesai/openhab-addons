@@ -64,9 +64,9 @@ public class DialAppState {
      * Get's the DIAL application state from the given content
      *
      * @param xml the non-null, non-empty XML 
-     * @return a {@link DialAppState}
+     * @return a {@link DialAppState} or null if cannot be parsed
      */
-    public static DialAppState get(String xml) {
+    public static @Nullable DialAppState get(String xml) {
         Validate.notEmpty(xml, "xml cannot be empty");
         return DialXmlReader.APPSTATE.fromXML(xml);
     }

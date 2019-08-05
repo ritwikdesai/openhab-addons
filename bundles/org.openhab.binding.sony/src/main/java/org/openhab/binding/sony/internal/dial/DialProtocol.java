@@ -101,7 +101,6 @@ class DialProtocol<T extends ThingCallback<String>> implements AutoCloseable {
 
         transport = SonyTransportFactory.createHttpTransport(deviceUrlStr);
 
-
         SonyUtil.sendWakeOnLan(logger, config.getDeviceIpAddress(), config.getDeviceMacAddress());
         final DialClient dialClient = DialClient.get(transport, this.deviceUrlStr);
         if (dialClient == null) {
@@ -115,7 +114,7 @@ class DialProtocol<T extends ThingCallback<String>> implements AutoCloseable {
     /**
      * Attempts to log into the system. This method will attempt to get the current applications list. If the current
      * application list is forbidden, we attempt to register the device (either by registring the access code or
-     * requesting an access code).  If we get the current application list, we simply renew our registration code.
+     * requesting an access code). If we get the current application list, we simply renew our registration code.
      *
      * @return a non-null {@link LoginUnsuccessfulResponse} if we can't login (usually pending access) or null if the
      *         login was successful
@@ -132,6 +131,10 @@ class DialProtocol<T extends ThingCallback<String>> implements AutoCloseable {
         boolean needsAuth = false;
         for (DialDeviceInfo info : dialClient.getDeviceInfos()) {
             final String appsListUrl = info.getAppsListUrl();
+            if (appsListUrl == null || StringUtils.isEmpty(appsListUrl)) {
+                return new LoginUnsuccessfulResponse(ThingStatusDetail.CONFIGURATION_ERROR,
+                        "No application list URL to check");
+            }
             final HttpResponse resp = getApplicationList(appsListUrl);
             if (resp.getHttpCode() == HttpStatus.FORBIDDEN_403) {
                 needsAuth = true;
@@ -215,7 +218,9 @@ class DialProtocol<T extends ThingCallback<String>> implements AutoCloseable {
                 }
 
                 final DialAppState state = DialAppState.get(resp.getContent());
-                callback.stateChanged(channelId, state.isRunning() ? OnOffType.ON : OnOffType.OFF);
+                if (state != null) {
+                    callback.stateChanged(channelId, state.isRunning() ? OnOffType.ON : OnOffType.OFF);
+                }
             }
         } catch (IOException e) {
             logger.debug("Error refreshing the 'state' of the application: {}", e.getMessage());
@@ -266,6 +271,7 @@ class DialProtocol<T extends ThingCallback<String>> implements AutoCloseable {
 
     /**
      * Helper method to get the dial application for the given application id
+     * 
      * @param appId a non-null, non-empty appication id
      * @return the DialApp for the applId or null if not found
      */
@@ -306,6 +312,7 @@ class DialProtocol<T extends ThingCallback<String>> implements AutoCloseable {
 
     /**
      * Gets the application list for a given url
+     * 
      * @param appsListUrl a non-null, non-empty application list url
      * @return the http response for the call
      */

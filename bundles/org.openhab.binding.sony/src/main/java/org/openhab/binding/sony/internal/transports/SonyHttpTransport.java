@@ -19,6 +19,7 @@ import java.util.concurrent.CompletableFuture;
 
 import com.google.gson.Gson;
 import org.eclipse.jdt.annotation.NonNullByDefault;
+import org.eclipse.jetty.http.HttpStatus;
 import org.openhab.binding.sony.internal.net.Header;
 import org.openhab.binding.sony.internal.net.HttpRequest;
 import org.openhab.binding.sony.internal.net.NetUtil;
@@ -62,7 +63,8 @@ public class SonyHttpTransport extends AbstractSonyTransport {
 
         this.requestor.register(new SonyContentTypeFilter());
         this.requestor.register(new SonyAuthFilter(getBaseUrl(), () -> {
-            return getOptions(TransportOptionAutoAuth.class).stream().anyMatch(e -> e.isAutoAuth());
+            final boolean authNeeded = getOptions(TransportOptionAutoAuth.class).stream().anyMatch(e -> e.isAutoAuth());
+            return authNeeded;
         }));
         this.setOption(TransportOptionAutoAuth.FALSE);
 
@@ -71,42 +73,62 @@ public class SonyHttpTransport extends AbstractSonyTransport {
 
     @Override
     public CompletableFuture<? extends TransportResult> execute(TransportPayload payload, TransportOption... options) {
-        final TransportOptionMethod method = getOptions(TransportOptionMethod.class, options).stream().findFirst()
-                .orElse(TransportOptionMethod.POST_JSON);
+        final TransportOptionAutoAuth oldAutoAuth = getOptions(TransportOptionAutoAuth.class).stream().findFirst()
+                .orElse(TransportOptionAutoAuth.FALSE);
+        final TransportOptionAutoAuth newAutoAuth = getOptions(TransportOptionAutoAuth.class, options).stream()
+                .findFirst().orElse(oldAutoAuth);
 
-        if (method == TransportOptionMethod.GET) {
-            if (!(payload instanceof TransportPayloadHttp)) {
-                throw new IllegalArgumentException(
-                        "payload must be a TransportPayloadHttp: " + payload.getClass().getName());
+        try {
+            if (oldAutoAuth.isAutoAuth() != newAutoAuth.isAutoAuth()) {
+                setOption(newAutoAuth);
             }
 
-            return executeGet((TransportPayloadHttp) payload, options);
-        } else if (method == TransportOptionMethod.DELETE) {
-            if (!(payload instanceof TransportPayloadHttp)) {
-                throw new IllegalArgumentException(
-                        "payload must be a TransportPayloadHttp: " + payload.getClass().getName());
-            }
+            final TransportOptionMethod method = getOptions(TransportOptionMethod.class, options).stream().findFirst()
+                    .orElse(TransportOptionMethod.POST_JSON);
 
-            return executeDelete((TransportPayloadHttp) payload, options);
-        } else if (method == TransportOptionMethod.POST_XML) {
-            if (!(payload instanceof TransportPayloadHttp)) {
-                throw new IllegalArgumentException(
-                        "payload must be a TransportPayloadHttp: " + payload.getClass().getName());
-            }
+            if (method == TransportOptionMethod.GET) {
+                if (!(payload instanceof TransportPayloadHttp)) {
+                    throw new IllegalArgumentException(
+                            "payload must be a TransportPayloadHttp: " + payload.getClass().getName());
+                }
 
-            return executePostXml((TransportPayloadHttp) payload, options);
-        } else {
-            if (payload instanceof TransportPayloadScalarWebRequest) {
-                return executePostJson((TransportPayloadScalarWebRequest) payload, options).thenApply(r -> {
-                    final ScalarWebResult res = gson.fromJson(r.getResponse().getContent(), ScalarWebResult.class);
-                    return new TransportResultScalarWebResult(res);
-                });
-            } else if (payload instanceof TransportPayloadHttp) {
-                return executePostJson((TransportPayloadHttp) payload, options);
+                return executeGet((TransportPayloadHttp) payload, options);
+            } else if (method == TransportOptionMethod.DELETE) {
+                if (!(payload instanceof TransportPayloadHttp)) {
+                    throw new IllegalArgumentException(
+                            "payload must be a TransportPayloadHttp: " + payload.getClass().getName());
+                }
+
+                return executeDelete((TransportPayloadHttp) payload, options);
+            } else if (method == TransportOptionMethod.POST_XML) {
+                if (!(payload instanceof TransportPayloadHttp)) {
+                    throw new IllegalArgumentException(
+                            "payload must be a TransportPayloadHttp: " + payload.getClass().getName());
+                }
+
+                return executePostXml((TransportPayloadHttp) payload, options);
             } else {
-                throw new IllegalArgumentException(
-                        "payload must be a TransportPayloadHttp or TransportPayloadScalarWebRequest: "
-                                + payload.getClass().getName());
+                if (payload instanceof TransportPayloadScalarWebRequest) {
+                    return executePostJson((TransportPayloadScalarWebRequest) payload, options).thenApply(r -> {
+                        if (r.getResponse().getHttpCode() == HttpStatus.OK_200) {
+                            final ScalarWebResult res = gson.fromJson(r.getResponse().getContent(),
+                                    ScalarWebResult.class);
+                            return new TransportResultScalarWebResult(res);
+                        } else {
+                            return new TransportResultScalarWebResult(new ScalarWebResult(r.getResponse()));
+                        }
+                    });
+                } else if (payload instanceof TransportPayloadHttp) {
+                    return executePostJson((TransportPayloadHttp) payload, options);
+                } else {
+                    throw new IllegalArgumentException(
+                            "payload must be a TransportPayloadHttp or TransportPayloadScalarWebRequest: "
+                                    + payload.getClass().getName());
+                }
+            }
+        } finally {
+            if (oldAutoAuth.isAutoAuth() != newAutoAuth.isAutoAuth()) {
+                setOption(oldAutoAuth);
             }
         }
     }
@@ -141,8 +163,8 @@ public class SonyHttpTransport extends AbstractSonyTransport {
 
         final Header[] headers = getHeaders(options);
 
-        return CompletableFuture.completedFuture(new TransportResultHttpResponse(
-                requestor.sendPostJsonCommand(request.getUrl(), payload, headers)));
+        return CompletableFuture.completedFuture(
+                new TransportResultHttpResponse(requestor.sendPostJsonCommand(request.getUrl(), payload, headers)));
     }
 
     private CompletableFuture<TransportResultHttpResponse> executePostXml(TransportPayloadHttp request,
@@ -153,8 +175,8 @@ public class SonyHttpTransport extends AbstractSonyTransport {
         Objects.requireNonNull(payload, "payload cannot be null"); // may be empty however
 
         final Header[] headers = getHeaders(options);
-        return CompletableFuture.completedFuture(new TransportResultHttpResponse(
-                requestor.sendPostXmlCommand(request.getUrl(), payload, headers)));
+        return CompletableFuture.completedFuture(
+                new TransportResultHttpResponse(requestor.sendPostXmlCommand(request.getUrl(), payload, headers)));
     }
 
     @Override

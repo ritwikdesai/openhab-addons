@@ -280,6 +280,10 @@ public class SonyAuth {
                 new ActRegisterId(), new Object[] { new ActRegisterOptions() }));
 
         final String actUrl = getActivationUrl();
+        if (actUrl == null) {
+            return ScalarWebResult.createNotImplemented(ScalarWebMethod.ACTREGISTER);
+        }
+        
         final HttpResponse r = transport.executePostJson(actUrl, actReg,
                 accessCode == null ? new TransportOption[0]
                         : new TransportOption[] { new TransportOptionHeader(NetUtil.createAuthHeader(accessCode)) });

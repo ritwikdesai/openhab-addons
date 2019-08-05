@@ -70,7 +70,7 @@ class ScalarWebAppControlProtocol<T extends ThingCallback<String>> extends Abstr
 
     // The intervals used for refresh
     private static final int APPLISTINTERVAL = 60000;
-    // private static final int ACTIVEAPPINTERVAL = 10000;
+    private static final int ACTIVEAPPINTERVAL = 10000;
 
     /** The encryption key to use */
     private final @Nullable String pubKey;
@@ -85,13 +85,13 @@ class ScalarWebAppControlProtocol<T extends ThingCallback<String>> extends Abstr
     private final List<ApplicationList> apps = new CopyOnWriteArrayList<ApplicationList>();
 
     /** The lock used to access activeApp */
-    // private final Lock activeAppLock = new ReentrantLock();
+    private final Lock activeAppLock = new ReentrantLock();
 
     /** The last time the activeApp was accessed */
-    // private long activeAppLastTime = 0;
+    private long activeAppLastTime = 0;
 
     /** The active app. */
-    // private @Nullable ActiveApp activeApp = null;
+    private @Nullable ActiveApp activeApp = null;
 
     /**
      * Instantiates a new scalar web app control protocol.
@@ -191,7 +191,7 @@ class ScalarWebAppControlProtocol<T extends ThingCallback<String>> extends Abstr
         final List<ScalarWebChannel> appChannels = getChannelTracker().getLinkedChannelsForCategory(APPTITLE, APPICON,
                 APPDATA, APPSTATUS);
         if (appChannels.size() > 0) {
-            // final ActiveApp activeApp = getActiveApp();
+            final ActiveApp activeApp = getActiveApp();
             for (final ApplicationList app : getApplications()) {
                 final String uri = app.getUri();
 
@@ -213,10 +213,10 @@ class ScalarWebAppControlProtocol<T extends ThingCallback<String>> extends Abstr
                                 break;
 
                             case APPSTATUS:
-                                // callback.stateChanged(cid,
-                                // activeApp == null ? OnOffType.OFF
-                                // : StringUtils.equalsIgnoreCase(activeApp.getUri(), uri) ? OnOffType.ON
-                                // : OnOffType.OFF);
+                                callback.stateChanged(cid,
+                                        activeApp == null ? OnOffType.OFF
+                                                : StringUtils.equalsIgnoreCase(activeApp.getUri(), uri) ? OnOffType.ON
+                                                        : OnOffType.OFF);
                                 break;
 
                             default:
@@ -293,7 +293,7 @@ class ScalarWebAppControlProtocol<T extends ThingCallback<String>> extends Abstr
                         break;
 
                     case APPSTATUS:
-                        // refreshAppStatus(channel.getChannelId(), target);
+                        refreshAppStatus(channel.getChannelId(), target);
                         break;
 
                     case STATUS:
@@ -315,23 +315,23 @@ class ScalarWebAppControlProtocol<T extends ThingCallback<String>> extends Abstr
      *
      * @return the active application or null if none
      */
-    // private @Nullable ActiveApp getActiveApp() {
-    // activeAppLock.lock();
-    // try {
-    // final long now = System.currentTimeMillis();
-    // if (activeApp == null || activeAppLastTime + ACTIVEAPPINTERVAL < now) {
-    // activeApp = execute(ScalarWebMethod.GETWEBAPPSTATUS).as(ActiveApp.class);
-    // activeAppLastTime = now;
-    // }
-    //
-    // } catch (IOException e) {
-    // // already handled by execute
-    // } finally {
-    // activeAppLock.unlock();
-    // }
-    //
-    // return activeApp;
-    // }
+    private @Nullable ActiveApp getActiveApp() {
+        activeAppLock.lock();
+        try {
+            final long now = System.currentTimeMillis();
+            if (activeApp == null || activeAppLastTime + ACTIVEAPPINTERVAL < now) {
+                activeApp = execute(ScalarWebMethod.GETWEBAPPSTATUS).as(ActiveApp.class);
+                activeAppLastTime = now;
+            }
+
+        } catch (IOException e) {
+            // already handled by execute
+        } finally {
+            activeAppLock.unlock();
+        }
+
+        return activeApp;
+    }
 
     /**
      * Gets the list of applications. Note that this method will cache the applications for {@link #APPLISTINTERVAL}
@@ -425,15 +425,15 @@ class ScalarWebAppControlProtocol<T extends ThingCallback<String>> extends Abstr
      * @param channelId the non-null, non-empty channel ID
      * @param appUri    the non-null, non-empty application URI
      */
-    // private void refreshAppStatus(String channelId, String appUri) {
-    // Validate.notEmpty(channelId, "channelId cannot be empty");
-    // Validate.notEmpty(appUri, "appUri cannot be empty");
-    // final ActiveApp app = getActiveApp();
-    // if (app != null) {
-    // callback.stateChanged(channelId,
-    // StringUtils.equalsIgnoreCase(appUri, app.getUri()) ? OnOffType.ON : OnOffType.OFF);
-    // }
-    // }
+    private void refreshAppStatus(String channelId, String appUri) {
+        Validate.notEmpty(channelId, "channelId cannot be empty");
+        Validate.notEmpty(appUri, "appUri cannot be empty");
+        final ActiveApp app = getActiveApp();
+        if (app != null) {
+            callback.stateChanged(channelId,
+                    StringUtils.equalsIgnoreCase(appUri, app.getUri()) ? OnOffType.ON : OnOffType.OFF);
+        }
+    }
 
     /**
      * Refresh status for the status name
@@ -454,7 +454,7 @@ class ScalarWebAppControlProtocol<T extends ThingCallback<String>> extends Abstr
             }
             callback.stateChanged(channelId, OnOffType.OFF);
         } catch (IOException e) {
-            // not implemented
+            logger.debug("Exception getting application status list: {}", e.getMessage());
         }
 
     }
@@ -478,7 +478,7 @@ class ScalarWebAppControlProtocol<T extends ThingCallback<String>> extends Abstr
                 callback.stateChanged(channelId, SonyUtil.newStringType(form.getText()));
             }
         } catch (IOException e) {
-            // not implemented
+            logger.debug("Exception getting text form: {}", e.getMessage());
         }
     }
 
@@ -507,11 +507,11 @@ class ScalarWebAppControlProtocol<T extends ThingCallback<String>> extends Abstr
                     } else {
                         logger.debug("APPSTATUS command not an StringType: {}", command);
                     }
-                    // if (command instanceof OnOffType) {
-                    // setAppStatus(paths[0], command == OnOffType.ON);
-                    // } else {
-                    // logger.debug("APPSTATUS command not an OnOffType: {}", command);
-                    // }
+                    if (command instanceof OnOffType) {
+                        setAppStatus(paths[0], command == OnOffType.ON);
+                    } else {
+                        logger.debug("APPSTATUS command not an OnOffType: {}", command);
+                    }
                 }
 
                 break;

@@ -111,7 +111,7 @@ public class SonyTransportFactory {
         }
     }
 
-    private SonyHttpTransport createServiceHttpTransport(String serviceName) {
+    private @Nullable SonyHttpTransport createServiceHttpTransport(String serviceName) {
         final String base = baseUrl.toString();
         final String baseUrlString = base + (base.endsWith("/") ? "" : "/")
                 + (serviceName.startsWith("/") ? serviceName.substring(1) : serviceName);
