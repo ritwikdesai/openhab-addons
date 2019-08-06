@@ -67,6 +67,8 @@ class ScalarWebAppControlProtocol<T extends ThingCallback<String>> extends Abstr
     private static final String APPSTATUS = "appstatus";
     private static final String TEXTFORM = "textform";
     private static final String STATUS = "status";
+    private static final String START = "start";
+    private static final String STOP = "stop";
 
     // The intervals used for refresh
     private static final int APPLISTINTERVAL = 60000;
@@ -214,9 +216,10 @@ class ScalarWebAppControlProtocol<T extends ThingCallback<String>> extends Abstr
 
                             case APPSTATUS:
                                 callback.stateChanged(cid,
-                                        activeApp == null ? OnOffType.OFF
-                                                : StringUtils.equalsIgnoreCase(activeApp.getUri(), uri) ? OnOffType.ON
-                                                        : OnOffType.OFF);
+                                        activeApp == null ? SonyUtil.newStringType(STOP)
+                                                : StringUtils.equalsIgnoreCase(activeApp.getUri(), uri)
+                                                        ? SonyUtil.newStringType(START)
+                                                        : SonyUtil.newStringType(STOP));
                                 break;
 
                             default:
@@ -431,7 +434,8 @@ class ScalarWebAppControlProtocol<T extends ThingCallback<String>> extends Abstr
         final ActiveApp app = getActiveApp();
         if (app != null) {
             callback.stateChanged(channelId,
-                    StringUtils.equalsIgnoreCase(appUri, app.getUri()) ? OnOffType.ON : OnOffType.OFF);
+                    StringUtils.equalsIgnoreCase(appUri, app.getUri()) ? SonyUtil.newStringType(START)
+                            : SonyUtil.newStringType(STOP));
         }
     }
 
@@ -503,7 +507,7 @@ class ScalarWebAppControlProtocol<T extends ThingCallback<String>> extends Abstr
                     logger.debug("Set APPSTATUS Channel path invalid: {}", channel);
                 } else {
                     if (command instanceof StringType) {
-                        setAppStatus(paths[0], StringUtils.equalsIgnoreCase("start", command.toString()));
+                        setAppStatus(paths[0], StringUtils.equalsIgnoreCase(START, command.toString()));
                     } else {
                         logger.debug("APPSTATUS command not an StringType: {}", command);
                     }

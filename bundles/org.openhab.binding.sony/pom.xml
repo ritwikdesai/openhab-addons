@@ -20,7 +20,7 @@
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-jar-plugin</artifactId>
-        <configuration>
+        <configuration combine.children="append">
           <excludes>
             <exclude>web/sonyapp/node_modules/**</exclude>
             <exclude>web/sonyapp/public/**</exclude>
@@ -32,7 +32,7 @@
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-source-plugin</artifactId>
-        <configuration>
+        <configuration combine.children="append">
           <excludes>
             <exclude>web/sonyapp/node_modules/**</exclude>
           </excludes>
