@@ -45,6 +45,7 @@ import org.openhab.binding.sony.internal.scalarweb.models.api.ApplicationStatusL
 import org.openhab.binding.sony.internal.scalarweb.models.api.PublicKey;
 import org.openhab.binding.sony.internal.scalarweb.models.api.TextFormRequest_1_1;
 import org.openhab.binding.sony.internal.scalarweb.models.api.TextFormResult;
+import org.openhab.binding.sony.internal.scalarweb.models.api.WebAppStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -87,13 +88,13 @@ class ScalarWebAppControlProtocol<T extends ThingCallback<String>> extends Abstr
     private final List<ApplicationList> apps = new CopyOnWriteArrayList<ApplicationList>();
 
     /** The lock used to access activeApp */
-    private final Lock activeAppLock = new ReentrantLock();
+    private final Lock webAppStatusLock = new ReentrantLock();
 
     /** The last time the activeApp was accessed */
-    private long activeAppLastTime = 0;
+    private long webAppStatusLastTime = 0;
 
     /** The active app. */
-    private @Nullable ActiveApp activeApp = null;
+    private @Nullable WebAppStatus webAppStatus = null;
 
     /**
      * Instantiates a new scalar web app control protocol.
@@ -193,7 +194,7 @@ class ScalarWebAppControlProtocol<T extends ThingCallback<String>> extends Abstr
         final List<ScalarWebChannel> appChannels = getChannelTracker().getLinkedChannelsForCategory(APPTITLE, APPICON,
                 APPDATA, APPSTATUS);
         if (appChannels.size() > 0) {
-            final ActiveApp activeApp = getActiveApp();
+            final WebAppStatus webAppStatus = getWebAppStatus();
             for (final ApplicationList app : getApplications()) {
                 final String uri = app.getUri();
 
@@ -216,10 +217,9 @@ class ScalarWebAppControlProtocol<T extends ThingCallback<String>> extends Abstr
 
                             case APPSTATUS:
                                 callback.stateChanged(cid,
-                                        activeApp == null ? SonyUtil.newStringType(STOP)
-                                                : StringUtils.equalsIgnoreCase(activeApp.getUri(), uri)
-                                                        ? SonyUtil.newStringType(START)
-                                                        : SonyUtil.newStringType(STOP));
+                                        webAppStatus != null && webAppStatus.isActive() && StringUtils.equalsIgnoreCase(webAppStatus.getUrl(), uri) 
+                                                    ? SonyUtil.newStringType(START)
+                                                    : SonyUtil.newStringType(STOP));
                                 break;
 
                             default:
@@ -318,22 +318,22 @@ class ScalarWebAppControlProtocol<T extends ThingCallback<String>> extends Abstr
      *
      * @return the active application or null if none
      */
-    private @Nullable ActiveApp getActiveApp() {
-        activeAppLock.lock();
+    private @Nullable WebAppStatus getWebAppStatus() {
+        webAppStatusLock.lock();
         try {
             final long now = System.currentTimeMillis();
-            if (activeApp == null || activeAppLastTime + ACTIVEAPPINTERVAL < now) {
-                activeApp = execute(ScalarWebMethod.GETWEBAPPSTATUS).as(ActiveApp.class);
-                activeAppLastTime = now;
+            if (webAppStatus == null || webAppStatusLastTime + ACTIVEAPPINTERVAL < now) {
+                webAppStatus = execute(ScalarWebMethod.GETWEBAPPSTATUS).as(WebAppStatus.class);
+                webAppStatusLastTime = now;
             }
 
         } catch (IOException e) {
             // already handled by execute
         } finally {
-            activeAppLock.unlock();
+            webAppStatusLock.unlock();
         }
 
-        return activeApp;
+        return webAppStatus;
     }
 
     /**
@@ -431,12 +431,11 @@ class ScalarWebAppControlProtocol<T extends ThingCallback<String>> extends Abstr
     private void refreshAppStatus(String channelId, String appUri) {
         Validate.notEmpty(channelId, "channelId cannot be empty");
         Validate.notEmpty(appUri, "appUri cannot be empty");
-        final ActiveApp app = getActiveApp();
-        if (app != null) {
-            callback.stateChanged(channelId,
-                    StringUtils.equalsIgnoreCase(appUri, app.getUri()) ? SonyUtil.newStringType(START)
-                            : SonyUtil.newStringType(STOP));
-        }
+        final WebAppStatus webAppStatus = getWebAppStatus();
+        callback.stateChanged(channelId,
+                webAppStatus != null && webAppStatus.isActive()
+                        && StringUtils.equalsIgnoreCase(appUri, webAppStatus.getUrl()) ? SonyUtil.newStringType(START)
+                                : SonyUtil.newStringType(STOP));
     }
 
     /**
@@ -559,5 +558,10 @@ class ScalarWebAppControlProtocol<T extends ThingCallback<String>> extends Abstr
         } else {
             handleExecute(ScalarWebMethod.TERMINATEAPPS);
         }
+    }
+
+    @Override
+    public boolean isDynamic() {
+        return true;
     }
 }

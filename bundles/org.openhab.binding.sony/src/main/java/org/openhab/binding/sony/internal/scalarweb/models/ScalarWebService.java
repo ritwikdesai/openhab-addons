@@ -17,6 +17,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -114,24 +115,32 @@ public class ScalarWebService implements AutoCloseable {
      * @return a non-null, possibly empty list of {@link ScalarWebMethod}
      */
     public List<ScalarWebMethod> getMethods() {
+        final Set<String> versions = new HashSet<>();
+        versions.add(ScalarWebMethod.V1_0);
+
         final List<ScalarWebMethod> methods = new ArrayList<>();
         try {
-            // Retrieve the versions for the service
-            final List<String> versionResult = execute(
-                    new ScalarWebRequest(++currId, ScalarWebMethod.GETVERSIONS, version)).asArray(String.class);
-
-            // For each version, retrieve the methods for the service
-            for (String apiVersion : versionResult) {
+            // Retrieve the api versions for the service
+            versions.addAll(execute(
+                    new ScalarWebRequest(++currId, ScalarWebMethod.GETVERSIONS, version)).asArray(String.class));
+        } catch (IOException e) {
+            if (StringUtils.contains(e.getMessage(), String.valueOf(HttpStatus.NOT_FOUND_404))) {
+                logger.debug("Could not retrieve method versions - missing method {}: {}", ScalarWebMethod.GETVERSIONS, e.getMessage());
+            } else {
+                logger.debug("Could not retrieve methods versions: {}", e.getMessage(), e);
+            }
+        }       
+        
+        // For each version, retrieve the methods for the service
+        for (String apiVersion : versions) {
+            try {
                 final MethodTypes mtdResults = execute(
                         new ScalarWebRequest(++currId, ScalarWebMethod.GETMETHODTYPES, version, apiVersion))
                                 .as(MethodTypes.class);
                 methods.addAll(mtdResults.getMethods());
-            }
-        } catch (IOException e) {
-            if (StringUtils.contains(e.getMessage(), String.valueOf(HttpStatus.NOT_FOUND_404))) {
-                logger.debug("Could not retrieve methods - missing method (or service unavilable): {}", e.getMessage());
-            } else {
-                logger.debug("Could not retrieve methods: {}", e.getMessage(), e);
+            } catch (IOException e) {
+                logger.debug("Could not retrieve {} vers {}: {}", ScalarWebMethod.GETMETHODTYPES, apiVersion,
+                        e.getMessage());
             }
         }
 
@@ -140,10 +149,9 @@ public class ScalarWebService implements AutoCloseable {
             api.getVersions().forEach(v -> {
                 if (!methods.stream().anyMatch(m -> StringUtils.equalsIgnoreCase(m.getMethodName(), api.getName())
                         && StringUtils.equalsIgnoreCase(v.getVersion(), m.getVersion()))) {
-                    methods.add(
-                            new ScalarWebMethod(api.getName(), new ArrayList<>(), new ArrayList<>(), v.getVersion()));
+                    methods.add(new ScalarWebMethod(api.getName(), new ArrayList<>(), new ArrayList<>(), v.getVersion(),
+                            ScalarWebMethod.UNKNOWN_VARIATION));
                 }
-
             });
         });
         return methods;
@@ -159,7 +167,7 @@ public class ScalarWebService implements AutoCloseable {
         supportedApi.getNotifications().forEach(api -> {
             api.getVersions().forEach(v -> {
                 notifications
-                        .add(new ScalarWebMethod(api.getName(), new ArrayList<>(), new ArrayList<>(), v.getVersion()));
+                        .add(new ScalarWebMethod(api.getName(), new ArrayList<>(), new ArrayList<>(), v.getVersion(), ScalarWebMethod.UNKNOWN_VARIATION));
             });
         });
         return notifications;

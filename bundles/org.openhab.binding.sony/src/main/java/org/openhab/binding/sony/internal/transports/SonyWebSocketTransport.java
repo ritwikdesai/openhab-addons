@@ -78,7 +78,7 @@ public class SonyWebSocketTransport extends AbstractSonyTransport {
     public SonyWebSocketTransport(WebSocketClient webSocketClient, URI uri, Gson gson,
             @Nullable ScheduledExecutorService scheduler)
             throws InterruptedException, ExecutionException, TimeoutException, IOException {
-        super(uri.toURL());
+        super(uri);
         Objects.requireNonNull(webSocketClient, "webSocketClient cannot be null");
         Objects.requireNonNull(uri, "uri cannot be null");
         Objects.requireNonNull(gson, "gson cannot be null");

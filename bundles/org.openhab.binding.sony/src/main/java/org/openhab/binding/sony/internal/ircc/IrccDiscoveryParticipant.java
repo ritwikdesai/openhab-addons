@@ -13,6 +13,7 @@
 package org.openhab.binding.sony.internal.ircc;
 
 import java.io.IOException;
+import java.net.URISyntaxException;
 import java.net.URL;
 import java.util.Objects;
 
@@ -72,20 +73,22 @@ public class IrccDiscoveryParticipant extends AbstractDiscoveryParticipant imple
             final IrccClient irccClient = new IrccClient(irccURL.toString());
             final IrccSystemInformation systemInformation = irccClient.getSystemInformation();
             sysWolAddress = systemInformation.getWolMacAddress();
-        } catch (IOException e) {
+        } catch (IOException | URISyntaxException e) {
             logger.debug("Exception getting device info: {}", e.getMessage(), e);
             return null;
         }
 
         final IrccConfig config = new IrccConfig();
-        config.setCommandsMapFile("ircc-" + uid.getId() + ".map");
-        config.setDeviceMacAddress(
+        config.setDiscoveredCommandsMapFile("ircc-" + uid.getId() + ".map");
+        config.setDiscoveredMacAddress(
                 sysWolAddress == null || StringUtils.isEmpty(sysWolAddress) ? getMacAddress(identity, uid)
                         : sysWolAddress);
 
         config.setDeviceAddress(irccURL.toString());
 
         return DiscoveryResultBuilder.create(uid).withProperties(config.asProperties())
+                .withProperty("IrccUDN", UidUtils.getThingId(identity.getUdn()))
+                .withRepresentationProperty("IrccUDN")
                 .withLabel(getLabel(device, "IRCC")).build();
     }
 

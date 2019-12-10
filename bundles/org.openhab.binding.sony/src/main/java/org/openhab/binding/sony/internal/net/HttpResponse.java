@@ -15,12 +15,14 @@ package org.openhab.binding.sony.internal.net;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.StringReader;
+import java.net.URI;
 import java.nio.charset.Charset;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 import javax.ws.rs.core.Response;
 import javax.xml.parsers.DocumentBuilder;
@@ -45,6 +47,9 @@ import org.xml.sax.SAXException;
 @NonNullByDefault
 public class HttpResponse {
 
+    /** The relation constant for NEXT */
+    public static final String REL_NEXT = "next";
+
     /** The encoding being used */
     private static final String ENCODING = "utf-8";
 
@@ -66,6 +71,9 @@ public class HttpResponse {
 
     /** The contents of the response */
     private final byte @Nullable [] contents;
+
+    /** Map of relation to URI for any links shown (may be empty but never null) */
+    private final Map<String, URI> links;
 
     /**
      * Instantiates a new http response from the specified {@link Response}
@@ -89,6 +97,8 @@ public class HttpResponse {
         for (String key : response.getHeaders().keySet()) {
             headers.put(key, response.getHeaderString(key));
         }
+
+        links = response.getLinks().stream().collect(Collectors.toMap(k -> k.getRel(), v -> v.getUri()));
     }
 
     /**
@@ -101,6 +111,7 @@ public class HttpResponse {
         httpStatus = httpCode;
         httpReason = msg;
         contents = null;
+        links = new HashMap<>();
     }
 
     /**
@@ -203,9 +214,27 @@ public class HttpResponse {
                 return new SOAPError(code, desc);
             }
         }
+        final Matcher m2 = SOAPERRORPATTERN.matcher(getContent());
+        if (m2.find() && m2.groupCount() >= 2) {
+            final String code = m2.group(1);
+            final String desc = m2.group(2);
+
+            if (StringUtils.isNotEmpty(code) && StringUtils.isNotEmpty(desc)) {
+                return new SOAPError(code, desc);
+            }
+        }
         return null;
     }
 
+    /**
+     * Returns the link associated with the relation
+     * @param a non-null, non-empty relation
+     * @return a possibly null URI associated with the relation
+     */
+    public @Nullable URI getLink(String rel) {
+        Validate.notEmpty(rel, "rel cannot be empty");
+        return links == null ? null : links.get(rel);
+    }
     /**
      * Creates the exception from the http reason
      *

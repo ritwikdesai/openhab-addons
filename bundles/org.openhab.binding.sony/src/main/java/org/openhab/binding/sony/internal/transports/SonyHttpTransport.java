@@ -12,12 +12,13 @@
  */
 package org.openhab.binding.sony.internal.transports;
 
-import java.net.MalformedURLException;
-import java.net.URL;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 
 import com.google.gson.Gson;
+
 import org.eclipse.jdt.annotation.NonNullByDefault;
 import org.eclipse.jetty.http.HttpStatus;
 import org.openhab.binding.sony.internal.net.Header;
@@ -48,10 +49,10 @@ public class SonyHttpTransport extends AbstractSonyTransport {
      * @param baseUrl
      * @param gson
      * @param filters
-     * @throws MalformedURLException
+     * @throws URISyntaxException
      */
-    public SonyHttpTransport(String baseUrl, Gson gson) throws MalformedURLException {
-        super(new URL(baseUrl));
+    public SonyHttpTransport(String baseUrl, Gson gson) throws URISyntaxException {
+        super(new URI(baseUrl));
         Objects.requireNonNull(gson, "gson cannot be null");
 
         requestor = new HttpRequest();
@@ -62,7 +63,7 @@ public class SonyHttpTransport extends AbstractSonyTransport {
         requestor.addHeader("Connection", "close");
 
         this.requestor.register(new SonyContentTypeFilter());
-        this.requestor.register(new SonyAuthFilter(getBaseUrl(), () -> {
+        this.requestor.register(new SonyAuthFilter(getBaseUri(), () -> {
             final boolean authNeeded = getOptions(TransportOptionAutoAuth.class).stream().anyMatch(e -> e.isAutoAuth());
             return authNeeded;
         }));
@@ -153,7 +154,7 @@ public class SonyHttpTransport extends AbstractSonyTransport {
 
         final Header[] headers = getHeaders(options);
         return CompletableFuture.completedFuture(new TransportResultHttpResponse(
-                requestor.sendPostJsonCommand(getBaseUrl().toExternalForm(), jsonRequest, headers)));
+                requestor.sendPostJsonCommand(getBaseUri().toString(), jsonRequest, headers)));
     }
 
     private CompletableFuture<TransportResultHttpResponse> executePostJson(TransportPayloadHttp request,

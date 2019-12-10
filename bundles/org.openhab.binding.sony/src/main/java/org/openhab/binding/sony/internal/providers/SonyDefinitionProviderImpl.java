@@ -20,6 +20,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
@@ -27,6 +28,7 @@ import org.apache.commons.lang.StringUtils;
 import org.apache.commons.lang.Validate;
 import org.eclipse.jdt.annotation.NonNullByDefault;
 import org.eclipse.jdt.annotation.Nullable;
+import org.eclipse.smarthome.core.common.ThreadPoolManager;
 import org.eclipse.smarthome.core.thing.Channel;
 import org.eclipse.smarthome.core.thing.ChannelUID;
 import org.eclipse.smarthome.core.thing.Thing;
@@ -45,6 +47,13 @@ import org.eclipse.smarthome.core.types.StateDescription;
 import org.eclipse.smarthome.core.types.StateDescriptionFragmentBuilder;
 import org.eclipse.smarthome.core.types.StateOption;
 import org.openhab.binding.sony.internal.SonyBindingConstants;
+import org.openhab.binding.sony.internal.providers.models.SonyDeviceCapability;
+import org.openhab.binding.sony.internal.providers.models.SonyThingChannelDefinition;
+import org.openhab.binding.sony.internal.providers.models.SonyThingDefinition;
+import org.openhab.binding.sony.internal.providers.models.SonyThingStateDefinition;
+import org.openhab.binding.sony.internal.providers.sources.SonyFolderSource;
+import org.openhab.binding.sony.internal.providers.sources.SonyGithubSource;
+import org.openhab.binding.sony.internal.providers.sources.SonySource;
 import org.openhab.binding.sony.internal.scalarweb.models.ScalarWebService;
 import org.osgi.service.component.annotations.Activate;
 import org.osgi.service.component.annotations.Component;
@@ -54,18 +63,19 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * This implementation of {@link SonyDefinitionProvider} will manage the various {@link SonySource} and provide data
- * from them
+ * This implementation of {@link SonyDefinitionProvider} will manage the various
+ * {@link SonySource} and provide data from them
  *
  * @author Tim Roberts - Initial contribution
  */
 @Component(immediate = true, service = { DynamicStateDescriptionProvider.class, SonyDynamicStateProvider.class,
-        SonyDefinitionProvider.class, ThingTypeProvider.class, ChannelGroupTypeProvider.class })
+        SonyDefinitionProvider.class, ThingTypeProvider.class, ChannelGroupTypeProvider.class },
+        properties="OSGI-INF/SonyDefinitionProviderImpl.properties")
 @NonNullByDefault
 public class SonyDefinitionProviderImpl
         implements SonyDefinitionProvider, ThingTypeProvider, SonyDynamicStateProvider, ChannelGroupTypeProvider {
     /** The logger */
-    protected Logger logger = LoggerFactory.getLogger(getClass());
+    private Logger logger = LoggerFactory.getLogger(getClass());
 
     /** The list of sources (created in activate, cleared in deactivate) */
     private final List<SonySource> sources = new ArrayList<>();
@@ -78,6 +88,10 @@ public class SonyDefinitionProviderImpl
 
     /** The thing registry used to lookup things */
     private @NonNullByDefault({}) ThingTypeRegistry thingTypeRegistry;
+
+    /** Scheduler used to schedule events */
+    private final ScheduledExecutorService scheduler = ThreadPoolManager
+            .getScheduledPool("SonyDefinitionProviderImpl");
 
     @Override
     public @Nullable ChannelGroupType getChannelGroupType(ChannelGroupTypeUID channelGroupTypeUID,
@@ -95,7 +109,7 @@ public class SonyDefinitionProviderImpl
     }
 
     @Override
-    public @Nullable Collection<ChannelGroupType> getChannelGroupTypes(@Nullable Locale locale) {
+    public Collection<ChannelGroupType> getChannelGroupTypes(@Nullable Locale locale) {
         final Map<ChannelGroupTypeUID, ChannelGroupType> groupTypes = new HashMap<>();
         for (SonySource src : sources) {
             final Collection<ChannelGroupType> localGroupTypes = src.getChannelGroupTypes();
@@ -165,12 +179,14 @@ public class SonyDefinitionProviderImpl
     }
 
     /**
-     * This is a helper method to get a state description for a specific thingUID and channel ID. This will intelligenly
-     * merge the original state description (from a thing definition) with any overrides that have been added
+     * This is a helper method to get a state description for a specific thingUID
+     * and channel ID. This will intelligenly merge the original state description
+     * (from a thing definition) with any overrides that have been added
      *
      * @param thingUID                 a non-null thing uid
      * @param channelId                a non-null, non-empty channel id
-     * @param originalStateDescription a potentially null (if none) original state description
+     * @param originalStateDescription a potentially null (if none) original state
+     *                                 description
      * @return
      */
     private @Nullable StateDescription getStateDescription(ThingUID thingUID, String channelId,
@@ -296,16 +312,12 @@ public class SonyDefinitionProviderImpl
 
         // Get the state channel that have a type (with no mapping)
         // ignore null warning as the filter makes sure it's not null
-        final List<SonyThingChannelDefinition> chls = thing.getChannels().stream().filter(channelFilter)
-                .map(chl -> {
-                    final ChannelTypeUID ctuid = chl.getChannelTypeUID();
-                    return ctuid == null ? null : 
-                        new SonyThingChannelDefinition(chl.getUID().getId(), null, ctuid.getId(),
-                                    new SonyThingStateDefinition(getStateDescription(chl, null, null)),
-                                    chl.getProperties());
-                })
-                .filter(chl -> chl != null)
-                .collect(Collectors.toList());
+        final List<SonyThingChannelDefinition> chls = thing.getChannels().stream().filter(channelFilter).map(chl -> {
+            final ChannelTypeUID ctuid = chl.getChannelTypeUID();
+            return ctuid == null ? null
+                    : new SonyThingChannelDefinition(chl.getUID().getId(), null, ctuid.getId(),
+                            new SonyThingStateDefinition(getStateDescription(chl, null, null)), chl.getProperties());
+        }).filter(chl -> chl != null).collect(Collectors.toList());
 
         final String label = thing.getLabel() == null || StringUtils.isEmpty(thing.getLabel()) ? thingType.getLabel()
                 : thing.getLabel();
@@ -326,8 +338,9 @@ public class SonyDefinitionProviderImpl
     }
 
     @Activate
-    public void activate() {
-        sources.add(new SonyFolderSource());
+    public void activate(Map<String, String> properties) {
+        sources.add(new SonyFolderSource(scheduler, properties)); // local takes preference over github
+        sources.add(new SonyGithubSource(scheduler, properties));
     }
 
     @Deactivate
@@ -356,4 +369,13 @@ public class SonyDefinitionProviderImpl
         this.thingTypeRegistry = null;
     }
 
+    @Override
+    public void addListener(String modelName, ThingTypeUID currentThingTypeUID, SonyProviderListener listener) {
+        sources.forEach(s->s.addListener(modelName, currentThingTypeUID, listener));
+    }
+
+    @Override
+    public boolean removeListener(SonyProviderListener listener) {
+        return sources.stream().map(s -> s.removeListener(listener)).anyMatch(e -> e);
+    }
 }

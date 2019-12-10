@@ -272,7 +272,7 @@ public class SimpleIpHandler extends AbstractThingHandler<SimpleIpConfig> {
      */
     @Override
     protected void connect() {
-        final SimpleIpConfig config = getConfigAs(SimpleIpConfig.class);
+        final SimpleIpConfig config = getSonyConfig();
 
         if (StringUtils.isEmpty(config.getDeviceIpAddress())) {
             updateStatus(ThingStatus.OFFLINE, ThingStatusDetail.CONFIGURATION_ERROR,
@@ -296,7 +296,7 @@ public class SimpleIpHandler extends AbstractThingHandler<SimpleIpConfig> {
                         }
 
                         @Override
-                        public void setProperty(String propertyName, String propertyValue) {
+                        public void setProperty(String propertyName, @Nullable String propertyValue) {
                             getThing().setProperty(propertyName, propertyValue);
                         }
                     });

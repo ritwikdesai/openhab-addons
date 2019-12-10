@@ -17,8 +17,10 @@ import java.util.function.Predicate;
 import org.eclipse.jdt.annotation.NonNullByDefault;
 import org.eclipse.smarthome.core.thing.Channel;
 import org.eclipse.smarthome.core.thing.Thing;
+import org.eclipse.smarthome.core.thing.ThingTypeUID;
 import org.eclipse.smarthome.core.thing.binding.ThingTypeProvider;
 import org.eclipse.smarthome.core.thing.type.ChannelGroupTypeProvider;
+import org.openhab.binding.sony.internal.providers.models.SonyDeviceCapability;
 
 /**
  * Defines the contract for a sony definition provider. A definition provider create thing types, channel group types
@@ -46,4 +48,7 @@ public interface SonyDefinitionProvider extends ThingTypeProvider, ChannelGroupT
      * @return a String if an error occurred, a File if a file was created
      */
     void writeThing(String service, String configUri, String modelName, Thing thing, Predicate<Channel> channelFilter);
+
+    void addListener(String modelName, ThingTypeUID currentThingTypeUID, SonyProviderListener listener);
+    boolean removeListener(SonyProviderListener listener);
 }

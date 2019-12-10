@@ -100,10 +100,12 @@ public class SimpleIpDiscoveryParticipant extends AbstractDiscoveryParticipant i
         config.setDeviceAddress(ipAddress);
 
         final RemoteDeviceIdentity identity = device.getIdentity();
-        config.setDeviceMacAddress(getMacAddress(identity, uid));
-        config.setCommandsMapFile("simpleip-" + uid.getId() + ".map");
+        config.setDiscoveredMacAddress(getMacAddress(identity, uid));
+        config.setDiscoveredCommandsMapFile("simpleip-" + uid.getId() + ".map");
 
         return DiscoveryResultBuilder.create(uid).withProperties(config.asProperties())
+                .withProperty("SimpleUDN", UidUtils.getThingId(identity.getUdn()))
+                .withRepresentationProperty("SimpleUDN")
                 .withLabel(getLabel(device, "Simple IP")).build();
     }
 

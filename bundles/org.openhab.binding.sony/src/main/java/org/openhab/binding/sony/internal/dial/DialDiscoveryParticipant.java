@@ -13,6 +13,7 @@
 package org.openhab.binding.sony.internal.dial;
 
 import java.io.IOException;
+import java.net.URISyntaxException;
 import java.net.URL;
 import java.util.Objects;
 
@@ -77,7 +78,7 @@ public class DialDiscoveryParticipant extends AbstractDiscoveryParticipant imple
             }
 
             deviceId = dialClient.getFirstDeviceId();
-        } catch (IOException e) {
+        } catch (IOException | URISyntaxException e) {
             logger.debug("DIAL device exception {}: {}", device.getIdentity(), e.getMessage(), e);
             return null;
         }
@@ -88,10 +89,12 @@ public class DialDiscoveryParticipant extends AbstractDiscoveryParticipant imple
         if (macAddress == null && NetUtil.isMacAddress(deviceId)) {
             macAddress = deviceId;
         }
-        config.setDeviceMacAddress(macAddress);
+        config.setDiscoveredMacAddress(macAddress);
         config.setDeviceAddress(dialURL.toString());
 
         return DiscoveryResultBuilder.create(uid).withProperties(config.asProperties())
+                .withProperty("DialUDN", UidUtils.getThingId(identity.getUdn()))
+                .withRepresentationProperty("DialUDN")
                 .withLabel(getLabel(device, "DIAL")).build();
     }
 
@@ -100,10 +103,10 @@ public class DialDiscoveryParticipant extends AbstractDiscoveryParticipant imple
         Objects.requireNonNull(device, "device cannot be null");
 
         if (isSonyDevice(device)) {
-            if (isScalarThingType(device)) {
-                logger.debug("Found a SCALAR thing type for this DIAL thing - ignoring DIAL");
-                return null;
-            }
+            // if (isScalarThingType(device)) {
+            //     logger.debug("Found a SCALAR thing type for this DIAL thing - ignoring DIAL");
+            //     return null;
+            // }
             final String modelName = getModelName(device);
             if (modelName == null || StringUtils.isEmpty(modelName)) {
                 logger.debug("Found Sony device but it has no model name - ignoring");

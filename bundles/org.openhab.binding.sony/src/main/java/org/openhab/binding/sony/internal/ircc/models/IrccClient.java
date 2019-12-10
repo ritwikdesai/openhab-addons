@@ -13,6 +13,7 @@
 package org.openhab.binding.sony.internal.ircc.models;
 
 import java.io.IOException;
+import java.net.URISyntaxException;
 import java.net.URL;
 import java.util.HashMap;
 import java.util.Map;
@@ -107,7 +108,7 @@ public class IrccClient {
      * @param irccUrl the non-null, non-empty IRCC URL
      * @throws IOException if an IO exception occurs getting information from the client
      */
-    public IrccClient(String irccUrl) throws IOException {
+    public IrccClient(String irccUrl) throws IOException, URISyntaxException {
         Validate.notEmpty(irccUrl, "irccUrl cannot be empty");
 
         try (SonyTransport transport = new SonyHttpTransport(irccUrl, GsonUtilities.getDefaultGson())) {

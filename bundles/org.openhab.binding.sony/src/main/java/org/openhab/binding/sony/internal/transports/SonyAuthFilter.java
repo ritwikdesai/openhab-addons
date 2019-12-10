@@ -13,13 +13,15 @@
 package org.openhab.binding.sony.internal.transports;
 
 import java.io.IOException;
-import java.net.URL;
+import java.net.ConnectException;
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import javax.ws.rs.ProcessingException;
 import javax.ws.rs.client.Client;
@@ -65,20 +67,22 @@ public class SonyAuthFilter implements ClientRequestFilter, ClientResponseFilter
     private static final String AUTHCOOKIENAME = "auth";
 
     /** The base URL of the access control service */
-    private final URL baseUrl;
+    private final URI baseUri;
 
     private final AutoAuth autoAuth;
+
+    private final AtomicBoolean hasAuthUrl = new AtomicBoolean(true);
 
     /**
      * Instantiates a new sony auth filter from the device information
      *
-     * @param baseUrl  the non-null, base URL for the access control service
+     * @param baseUri  the non-null, base URI for the access control service
      * @param autoAuth the non-null auto auth callback
      */
-    public SonyAuthFilter(URL baseUrl, AutoAuth autoAuth) {
-        Objects.requireNonNull(baseUrl, "baseUrl cannot be empty");
+    public SonyAuthFilter(URI baseUri, AutoAuth autoAuth) {
+        Objects.requireNonNull(baseUri, "baseUrl cannot be empty");
         Objects.requireNonNull(autoAuth, "autoAuth cannot be null");
-        this.baseUrl = baseUrl;
+        this.baseUri = baseUri;
         this.autoAuth = autoAuth;
     }
 
@@ -125,12 +129,12 @@ public class SonyAuthFilter implements ClientRequestFilter, ClientResponseFilter
             }
         }
 
-        if (authNeeded && autoAuth.isAutoAuth()) {
+        if (authNeeded && hasAuthUrl.get() && autoAuth.isAutoAuth()) {
             logger.debug("Trying to renew our authorization cookie");
             final Client client = ClientBuilder.newClient();
             // client.register(new LoggingFilter());
 
-            final String actControlUrl = NetUtil.getSonyUrl(baseUrl, ScalarWebService.ACCESSCONTROL);
+            final String actControlUrl = NetUtil.getSonyUri(baseUri, ScalarWebService.ACCESSCONTROL);
 
             final WebTarget target = client.target(actControlUrl);
             final Gson gson = GsonUtilities.getDefaultGson();
@@ -154,6 +158,9 @@ public class SonyAuthFilter implements ClientRequestFilter, ClientResponseFilter
                     logger.debug("No authorization cookie was returned");
                 }
             } catch (ProcessingException e) {
+                if (e.getCause() instanceof ConnectException) {
+                    hasAuthUrl.set(false);
+                }
                 logger.debug("Could not renew authorization cookie: {}", e.getMessage());
             }
         }

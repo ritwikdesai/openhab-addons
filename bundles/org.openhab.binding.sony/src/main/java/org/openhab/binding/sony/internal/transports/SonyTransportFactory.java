@@ -13,7 +13,6 @@
 package org.openhab.binding.sony.internal.transports;
 
 import java.io.IOException;
-import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
@@ -85,7 +84,7 @@ public class SonyTransportFactory {
                 return createWebSocketTransport(serviceName);
 
             default:
-                logger.debug("Unknown protocol: {}", protocol);
+                logger.debug("Unknown protocol: {} for service {}", protocol, serviceName);
                 return null;
         }
     }
@@ -118,13 +117,13 @@ public class SonyTransportFactory {
 
         try {
             return new SonyHttpTransport(baseUrlString, gson);
-        } catch (MalformedURLException e) {
+        } catch (URISyntaxException e) {
             logger.debug("Exception occurred creating transport: {}", e.getMessage());
             return null;
         }
     }
 
-    public static SonyHttpTransport createHttpTransport(String baseUrl) throws MalformedURLException {
+    public static SonyHttpTransport createHttpTransport(String baseUrl) throws URISyntaxException {
         return new SonyHttpTransport(baseUrl, GsonUtilities.getDefaultGson());
     }
 }

@@ -92,7 +92,7 @@ public class SonyHandlerFactory extends BaseThingHandlerFactory {
             }
             final SonyDynamicStateProvider localSonyDynamicStateProvider = sonyDynamicStateProvider;
             if (localSonyDynamicStateProvider == null) {
-                throw new IllegalStateException("No localSonyDynamicStateProvider found");
+                throw new IllegalStateException("No SonyDynamicStateProvider found");
             }
 
             return new ScalarWebHandler(thing, transformationService, localWebSocketClient, localSonyDefinitionProvider,

@@ -15,6 +15,7 @@ package org.openhab.binding.sony.internal.ircc;
 import java.io.File;
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
+import java.net.URISyntaxException;
 import java.net.URLDecoder;
 import java.net.URLEncoder;
 import java.nio.charset.Charset;
@@ -44,9 +45,11 @@ import org.eclipse.smarthome.core.thing.ThingStatusDetail;
 import org.eclipse.smarthome.core.transform.TransformationException;
 import org.eclipse.smarthome.core.transform.TransformationService;
 import org.eclipse.smarthome.core.types.UnDefType;
-import org.openhab.binding.sony.internal.AccessCheckResult;
+import org.openhab.binding.sony.internal.AccessResult;
+import org.openhab.binding.sony.internal.CheckResult;
 import org.openhab.binding.sony.internal.LoginUnsuccessfulResponse;
 import org.openhab.binding.sony.internal.SonyAuth;
+import org.openhab.binding.sony.internal.SonyAuthChecker;
 import org.openhab.binding.sony.internal.SonyUtil;
 import org.openhab.binding.sony.internal.ThingCallback;
 import org.openhab.binding.sony.internal.ircc.models.IrccClient;
@@ -124,7 +127,8 @@ class IrccProtocol<T extends ThingCallback<String>> implements AutoCloseable {
      * @param callback         a non-null {@link ThingCallback} to use as a callback
      * @throws IOException if an io exception occurs to the IRCC device
      */
-    IrccProtocol(IrccConfig config, @Nullable TransformationService transformService, T callback) throws IOException {
+    IrccProtocol(IrccConfig config, @Nullable TransformationService transformService, T callback)
+            throws IOException, URISyntaxException {
         Objects.requireNonNull(config, "config cannot be null");
         Objects.requireNonNull(callback, "callback cannot be null");
 
@@ -164,35 +168,60 @@ class IrccProtocol<T extends ThingCallback<String>> implements AutoCloseable {
         transport.setOption(TransportOptionAutoAuth.FALSE);
 
         SonyUtil.sendWakeOnLan(logger, config.getDeviceIpAddress(), config.getDeviceMacAddress());
-        final HttpResponse status = getStatus();
+        final String accessCode = config.getAccessCode();
 
-        // If we were forbidden (to get the status) or got a service unavailable (no get status) - try to register
-        if (status.getHttpCode() == HttpStatus.FORBIDDEN_403
-                || status.getHttpCode() == HttpStatus.SERVICE_UNAVAILABLE_503) {
-            final String accessCode = config.getAccessCode();
+        final SonyAuthChecker authChecker = new SonyAuthChecker(transport, accessCode);
+        final CheckResult checkResult = authChecker.checkResult(() -> {
+            // try to execute a non-existent command.  If it worked (lol) or returned a 500 (which means it doesn't exist).
+            // then we are good (we didn't get a forbidden)
+            final HttpResponse status = irccClient.executeSoap(transport, "nonexistentcommand");
+            if (status.getHttpCode() == HttpStatus.OK_200 || status.getHttpCode() == HttpStatus.INTERNAL_SERVER_ERROR_500) {
+                return AccessResult.OK;
+            }
+            if (status.getHttpCode() == HttpStatus.FORBIDDEN_403
+                    || status.getHttpCode() == HttpStatus.SERVICE_UNAVAILABLE_503) {
+                return AccessResult.NEEDSPAIRING;
+            }
+            return new AccessResult(status);
+        });
+
+        if (CheckResult.OK_HEADER.equals(checkResult)) {
+            if (accessCode == null || StringUtils.isEmpty(accessCode)) {
+                // This shouldn't happen - if our check result is OK_HEADER, then
+                // we had a valid (non-null, non-empty) accessCode. Unfortunately
+                // nullable checking thinks this can be null now.
+                logger.debug("This shouldn't happen - access code is blank!: {}", accessCode);
+                return new LoginUnsuccessfulResponse(ThingStatusDetail.CONFIGURATION_ERROR,
+                        "Access code cannot be blank");
+            } else {
+                SonyAuth.setupHeader(accessCode, transport);
+            }
+        } else if (CheckResult.OK_COOKIE.equals(checkResult)) {
+            SonyAuth.setupCookie(transport);
+        } else if (AccessResult.NEEDSPAIRING.equals(checkResult)) {
             if (StringUtils.isEmpty(accessCode)) {
                 return new LoginUnsuccessfulResponse(ThingStatusDetail.CONFIGURATION_ERROR,
                         "Access code cannot be blank");
             } else {
-                final AccessCheckResult result = sonyAuth.requestAccess(transport,
+                final AccessResult result = sonyAuth.requestAccess(transport,
                         StringUtils.equalsIgnoreCase(IrccConstants.ACCESSCODE_RQST, accessCode) ? null : accessCode);
-                if (result == AccessCheckResult.OK) {
-                    // GOOD!
+                if (AccessResult.OK.equals(result)) {
+                    SonyAuth.setupCookie(transport);
                 } else {
                     return new LoginUnsuccessfulResponse(ThingStatusDetail.CONFIGURATION_ERROR, result.getMsg());
                 }
             }
         } else {
-            final AccessCheckResult resp = sonyAuth.registerRenewal(transport);
-            if (resp != AccessCheckResult.OK) {
+            final AccessResult resp = sonyAuth.registerRenewal(transport);
+            if (AccessResult.OK.equals(resp)) {
+                SonyAuth.setupCookie(transport);
+            } else {
                 // Use configuration_error - prevents handler from continually trying to
                 // reconnect
                 return new LoginUnsuccessfulResponse(ThingStatusDetail.CONFIGURATION_ERROR,
                         "Error registering renewal: " + resp.getMsg());
             }
         }
-
-        transport.setOption(TransportOptionAutoAuth.TRUE);
 
         writeCommands();
 
@@ -723,6 +752,8 @@ class IrccProtocol<T extends ThingCallback<String>> implements AutoCloseable {
             // yay!
         } else if (resp.getHttpCode() == HttpStatus.SERVICE_UNAVAILABLE_503) {
             logger.debug("IRCC service is unavailable (power off?)");
+        } else if (resp.getHttpCode() == HttpStatus.INTERNAL_SERVER_ERROR_500) {
+            logger.debug("IRCC service returned a 500 - probably an unknown command: {}", cmdToSend);
         } else {
             logger.error("Bad return code from {}: {}", IrccClient.SRV_ACTION_SENDIRCC, resp);
         }

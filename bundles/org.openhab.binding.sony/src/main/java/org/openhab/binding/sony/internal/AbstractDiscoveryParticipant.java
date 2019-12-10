@@ -86,7 +86,7 @@ public abstract class AbstractDiscoveryParticipant {
      * @param device a non-null device
      * @return true if it's a sony device, false otherwise
      */
-    protected boolean isSonyDevice(RemoteDevice device) {
+    protected static boolean isSonyDevice(RemoteDevice device) {
         Objects.requireNonNull(device, "device cannot be null");
 
         final DeviceDetails details = device.getDetails();
@@ -103,11 +103,25 @@ public abstract class AbstractDiscoveryParticipant {
      * @param device a non-null device
      * @return the model name or null if none found
      */
-    protected @Nullable String getModelName(RemoteDevice device) {
+    protected static @Nullable String getModelName(RemoteDevice device) {
         Objects.requireNonNull(device, "device cannot be null");
 
         final DeviceDetails details = device.getDetails();
-        return details == null || details.getModelDetails() == null ? null : details.getModelDetails().getModelName();
+        if (details == null) {
+            return null;
+        }
+
+        final String modelName = details.getModelDetails() == null ? null : details.getModelDetails().getModelName();
+        if (modelName != null && StringUtils.isNotEmpty(modelName) && SonyUtil.isValidModelName(modelName)) {
+            return modelName;
+        }
+
+        final String friendlyName = details.getFriendlyName();
+        if (friendlyName != null && StringUtils.isNotEmpty(friendlyName) && SonyUtil.isValidModelName(friendlyName)) {
+            return friendlyName;
+        }
+
+        return StringUtils.isNotEmpty(friendlyName) ? friendlyName : modelName;
     }
 
     /**
@@ -116,7 +130,7 @@ public abstract class AbstractDiscoveryParticipant {
      * @param device a non-null device
      * @return the model description or null if none found
      */
-    protected @Nullable String getModelDescription(RemoteDevice device) {
+    protected static @Nullable String getModelDescription(RemoteDevice device) {
         Objects.requireNonNull(device, "device cannot be null");
 
         final DeviceDetails details = device.getDetails();
@@ -151,9 +165,30 @@ public abstract class AbstractDiscoveryParticipant {
     protected static String getLabel(RemoteDevice device, String suffix) {
         Objects.requireNonNull(device, "device cannot be null");
         Validate.notEmpty(suffix, "suffix cannot be empty");
-        
-        return (StringUtils.isEmpty(device.getDetails().getFriendlyName()) ? device.getDisplayString()
-                : device.getDetails().getFriendlyName()) + " " + suffix;
+
+        final String modelName = getModelName(device);
+        final String friendlyName = device.getDetails().getFriendlyName();
+
+        final StringBuilder sb = new StringBuilder();
+
+        if (StringUtils.isNotEmpty(friendlyName)) {
+            sb.append(friendlyName);
+        } else if (StringUtils.isNotEmpty(modelName)) {
+            sb.append(modelName);
+        } else {
+            sb.append(device.getDisplayString());
+        }
+
+        // if (StringUtils.isNotEmpty(friendlyName) && StringUtils.isNotEmpty(modelName)) {
+        //     sb.append(" (");
+        //     sb.append(modelName);
+        //     sb.append(")");
+        // }
+
+        // sb.append(" ");
+        // sb.append(suffix);
+
+        return sb.toString();
     }
 
     /**
@@ -202,19 +237,13 @@ public abstract class AbstractDiscoveryParticipant {
             return null;
         }
 
-        final String lowerModelName = modelName.toLowerCase();
         for (ThingType tt : provider.getThingTypes(Locale.getDefault())) {
-            final String typeId = tt.getUID().getId();
-            // If it's not the generic one...
-            if (!typeId.equals(service) && typeId.startsWith(service)) {
-                final String model = typeId.substring(service.length() + 1);
-                final String modelPattern = model.replaceAll("x", ".*").toLowerCase();
-                if (lowerModelName.matches(modelPattern)) {
-                    logger.debug("Using specific thing type for {}: {}", modelName, typeId);
-                    return tt.getUID();
-                }
+            if (SonyUtil.isModelMatch(tt.getUID(), service, modelName)) {
+                logger.debug("Using specific thing type for {}: {}", modelName, tt);
+                return tt.getUID();
             }
         }
+        
         logger.debug("No specific thing type found for {}", modelName);
         return null;
     }

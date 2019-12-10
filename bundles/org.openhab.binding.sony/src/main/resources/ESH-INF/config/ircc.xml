@@ -1,8 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<config-description:config-descriptions
-	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-	xmlns:config-description="http://eclipse.org/smarthome/schemas/config-description/v1.0.0"
-	xsi:schemaLocation="http://eclipse.org/smarthome/schemas/config-description/v1.0.0 http://eclipse.org/smarthome/schemas/config-description-1.0.0.xsd">
+<config-description:config-descriptions xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+	xmlns:config-description="https://openhab.org/schemas/config-description/v1.0.0" xsi:schemaLocation="https://openhab.org/schemas/config-description/v1.0.0 https://openhab.org/schemas/config-description-1.0.0.xsd">
 
 	<config-description uri="thing-type:sony:irccconfig">
 		<parameter name="deviceAddress" type="text" required="true">
@@ -15,7 +13,7 @@
 			<label>Device MAC Address</label>
 			<description>The MAC address of the device (TV, bluray, etc)</description>
 		</parameter>
-		<parameter name="commandsMapFile" type="text" required="true">
+		<parameter name="commandsMapFile" type="text">
 			<context>mappings</context>
 			<label>Commands Map File</label>
 			<description>The Commands Map File</description>
@@ -46,6 +44,12 @@
 			<label>Status Check Interval</label>
 			<description>The time, in seconds, to check the device status (-1 to disable)</description>
 			<default>30</default>
+			<advanced>true</advanced>
+		</parameter>
+		<parameter name="discoveredCommandsMapFile" type="text" readOnly="true">
+			<context>discovery</context>
+			<label>Discovered Commands Map File (READONLY)</label>
+			<description>The Commands Map File that was initially discovered - use the Command Maps File to override</description>
 			<advanced>true</advanced>
 		</parameter>
 	</config-description>

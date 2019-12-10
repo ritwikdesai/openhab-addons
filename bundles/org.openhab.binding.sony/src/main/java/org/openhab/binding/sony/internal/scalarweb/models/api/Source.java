@@ -27,6 +27,11 @@ import org.eclipse.jdt.annotation.Nullable;
 @NonNullByDefault
 public class Source {
 
+    public static final String TV_ANALOG = "tv:analog";
+    public static final String TV_ATSC = "tv:atsct";
+    public static final String TV_DVBT = "tv:dvbt";
+    public static final String RADIO_FM = "radio:fm";
+
     public static final Pattern RADIOPATTERN = Pattern.compile("(radio:fm\\?contentId=)(\\d+)");
 
     private @Nullable Boolean isBrowsable;
@@ -58,6 +63,16 @@ public class Source {
      */
     public @Nullable String getSource() {
         return source;
+    }
+
+    public @Nullable String getSourcePart() {
+        final String localSource = source;
+        if (localSource == null) {
+            return null;
+        }
+
+        final int idx = localSource.indexOf(":");
+        return idx < 0 ? localSource : localSource.substring(idx + 1);
     }
 
     public @Nullable String getTitle() {

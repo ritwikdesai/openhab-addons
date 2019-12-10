@@ -32,6 +32,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import org.apache.commons.lang.BooleanUtils;
@@ -188,6 +189,9 @@ class ScalarWebAvContentProtocol<T extends ThingCallback<String>> extends Abstra
     private static final String PL_APPLICATIONNAME = PLAYING + "applicationname";
     private static final String PL_PRESET = PLAYING + "presetid";
 
+    private static final String PRESETS = "ps_";
+    private static final String PS_CHANNEL = PRESETS + "channel";
+
     private static final String INPUT = "in_";
     private static final String IN_URI = INPUT + "uri";
     private static final String IN_TITLE = INPUT + "title";
@@ -306,6 +310,11 @@ class ScalarWebAvContentProtocol<T extends ThingCallback<String>> extends Abstra
 
     private final ConcurrentMap<String, String> stateTermToUid = new ConcurrentHashMap<>();
 
+    private static final Pattern PORT_MATCHER = Pattern.compile(".*port=(\\d+).*");
+
+    /** The Constant MAX_CT. */
+    private final static int MAX_CT = 50;
+
     /**
      * Instantiates a new scalar web av content protocol.
      *
@@ -358,6 +367,11 @@ class ScalarWebAvContentProtocol<T extends ThingCallback<String>> extends Abstra
 
         addGeneralSettingsDescriptor(descriptors, cache, ScalarWebMethod.GETPLAYBACKMODESETTINGS, PLAYBACKSETTINGS,
                 "Playback Setting");
+
+        // Add the predefined channels
+        if (service.hasMethod(ScalarWebMethod.GETCONTENTLIST)) {
+            addPredefinedDescriptors(descriptors, cache);
+        }
 
         // update the terminal sources
         updateTermSource();
@@ -744,8 +758,8 @@ class ScalarWebAvContentProtocol<T extends ThingCallback<String>> extends Abstra
      * @param title a non-null, non-empty input title
      * @param apiVersion a non-null, non-empty API version
      */
-    private void addInputStatusDescriptor(List<ScalarWebChannelDescriptor> descriptors,
-            String id, String uri, String title, String apiVersion) {
+    private void addInputStatusDescriptor(List<ScalarWebChannelDescriptor> descriptors, String id, String uri,
+            String title, String apiVersion) {
         Objects.requireNonNull(descriptors, "descriptors cannot be null");
         Validate.notEmpty(id, "id cannot be empty");
         Validate.notEmpty(uri, "uri cannot be empty");
@@ -793,7 +807,7 @@ class ScalarWebAvContentProtocol<T extends ThingCallback<String>> extends Abstra
                         continue;
                     }
 
-                    final String id = cache.getUniqueChannelId(status.getTitle(uri));
+                    final String id = getChannelId(cache, uri, status.getTitle(uri));
                     addInputStatusDescriptor(descriptors, id, uri, status.getTitle(MAINTITLE), ScalarWebMethod.V1_0);
                 }
             } else if (VersionUtilities.equals(version, ScalarWebMethod.V1_1)) {
@@ -804,7 +818,7 @@ class ScalarWebAvContentProtocol<T extends ThingCallback<String>> extends Abstra
                         continue;
                     }
 
-                    final String id = cache.getUniqueChannelId(status.getTitle(uri));
+                    final String id = getChannelId(cache, uri, status.getTitle(uri));
                     addInputStatusDescriptor(descriptors, id, uri, status.getTitle(MAINTITLE), ScalarWebMethod.V1_1);
                 }
             }
@@ -826,7 +840,6 @@ class ScalarWebAvContentProtocol<T extends ThingCallback<String>> extends Abstra
 
             descriptors.add(
                     createDescriptor(createChannel(PR_RATINGTYPEAGE), "Number", "scalarwebavcontrolprratingtypeage"));
-
             descriptors.add(
                     createDescriptor(createChannel(PR_RATINGTYPESONY), "String", "scalarwebavcontrolprratingtypesony"));
             descriptors.add(
@@ -1018,7 +1031,7 @@ class ScalarWebAvContentProtocol<T extends ThingCallback<String>> extends Abstra
             }
 
             final String title = term.getTitle(MAINTITLE);
-            final String id = cache.getUniqueChannelId(term.getTitle(uri));
+            final String id = getChannelId(cache, uri, term.getTitle(uri));
 
             stateTermToUid.put(uri, id);
 
@@ -1051,28 +1064,118 @@ class ScalarWebAvContentProtocol<T extends ThingCallback<String>> extends Abstra
         }
     }
 
+    private void addPredefinedDescriptors(List<ScalarWebChannelDescriptor> descriptors, ChannelIdCache cache) {
+        for (Scheme scheme : getSchemes()) {
+            if (StringUtils.equalsIgnoreCase(Scheme.TV, scheme.getScheme())
+                    || StringUtils.equalsIgnoreCase(Scheme.RADIO, scheme.getScheme())) {
+                for (Source src : getSources(scheme)) {
+                    addPredefinedDescriptor(descriptors, cache, src);
+                }
+            }
+        }
+    }
+
+    private void addPredefinedDescriptor(List<ScalarWebChannelDescriptor> descriptors, ChannelIdCache cache, Source src) {
+        Objects.requireNonNull(descriptors, "descriptors cannot be null");
+        Objects.requireNonNull(cache, "cache cannot be null");
+        Objects.requireNonNull(src, "src cannot be null");
+
+        Count ct;
+
+        final String source = src.getSource();
+        if (source == null || StringUtils.isEmpty(source)) {
+            // TODO log
+            return;
+        }
+
+        final String sourcePart = src.getSourcePart();
+        if (sourcePart == null || StringUtils.isEmpty(sourcePart)) {
+            // TODO log
+            return;
+        }
+
+        try {
+            ct = execute(ScalarWebMethod.GETCONTENTCOUNT, version -> {
+                if (VersionUtilities.equals(version, ScalarWebMethod.V1_0, ScalarWebMethod.V1_1,
+                        ScalarWebMethod.V1_2)) {
+                    return new ContentCount_1_0(source);
+                }
+                return new ContentCount_1_3(source);
+            }).as(Count.class);
+
+        } catch (IOException e) {
+            ct = new Count(0);
+        }
+
+        final List<ContentListResult_1_0> presets = new ArrayList<>();
+        try {
+            final int i = ct.getCount();
+            final int max = i + ((i % MAX_CT == 0 ? 0 : 1) * MAX_CT);
+            for (int idx = 0; idx < max; idx += MAX_CT) {
+                final int localIdx = idx;
+                final ScalarWebResult res = execute(ScalarWebMethod.GETCONTENTLIST, version -> {
+                    if (VersionUtilities.equals(version, ScalarWebMethod.V1_0, ScalarWebMethod.V1_1,
+                            ScalarWebMethod.V1_2, ScalarWebMethod.V1_3)) {
+                        return new ContentListRequest_1_0(source, localIdx, MAX_CT);
+                    }
+                    return new ContentListRequest_1_4(source, localIdx, MAX_CT);
+                });
+
+                for (ContentListResult_1_0 clr : res.asArray(ContentListResult_1_0.class)) {
+                    presets.add(clr);
+                }
+            }
+        } catch (IOException e) {
+
+        }
+
+        if (!presets.isEmpty()) {
+            final ScalarWebChannel chl = createChannel(PS_CHANNEL, sourcePart, source);
+
+            final String upperSrc = sourcePart.toUpperCase();
+            descriptors.add(createDescriptor(chl, "String", "scalarwebavcontrolpresetchannel", "Presets for " + upperSrc, "Set preset for " + upperSrc));
+
+            final StateDescriptionFragmentBuilder bld = StateDescriptionFragmentBuilder.create()
+                    .withOptions(presets.stream().map(e -> {
+                        final String title = e.getTitle();
+                        return new StateOption(e.getDispNum(), StringUtils.isEmpty(title) ? e.getDispNum() : title);
+                    })
+                    .sorted((a, b) -> ObjectUtils.compare(a.getLabel(), b.getLabel()))
+                            .collect(Collectors.toList()));
+
+            final StateDescription sd = bld.build().toStateDescription();
+            if (sd != null) {
+                getContext().getStateProvider().addStateOverride(getContext().getThingUID(),
+                        getContext().getMapper().getMappedChannelId(chl.getChannelId()),
+                        sd);
+            }
+        }
+    }
+
+
+
     @Override
     protected void eventReceived(ScalarWebEvent event) throws IOException {
         switch (event.getMethod()) {
-            case ScalarWebEvent.NOTIFYPLAYINGCONTENTINFO:
-                final String version = getVersion(ScalarWebMethod.GETPLAYINGCONTENTINFO);
-                if (VersionUtilities.equals(version, ScalarWebMethod.V1_0, ScalarWebMethod.V1_1)) {
-                    notifyPlayingContentInfo(event.as(PlayingContentInfoResult_1_0.class), getIdForOutput(MAINOUTPUT));
-                } else {
-                    final PlayingContentInfoResult_1_2 res = event.as(PlayingContentInfoResult_1_2.class);
-                    final String output = res.getOutput(MAINOUTPUT);
-                    notifyPlayingContentInfo(res, getIdForOutput(output));
-                }
+        case ScalarWebEvent.NOTIFYPLAYINGCONTENTINFO:
+            final String version = getVersion(ScalarWebMethod.GETPLAYINGCONTENTINFO);
+            if (VersionUtilities.equals(version, ScalarWebMethod.V1_0, ScalarWebMethod.V1_1)) {
+                notifyPlayingContentInfo(event.as(PlayingContentInfoResult_1_0.class), getIdForOutput(MAINOUTPUT));
+            } else {
+                final PlayingContentInfoResult_1_2 res = event.as(PlayingContentInfoResult_1_2.class);
+                final String output = res.getOutput(MAINOUTPUT);
+                notifyPlayingContentInfo(res, getIdForOutput(output));
+            }
 
-                break;
+            break;
 
-            case ScalarWebEvent.NOTIFYEXTERNALTERMINALSTATUS:
-                notifyCurrentTerminalStatus(event.as(CurrentExternalTerminalsStatus_1_0.class));
-                break;
+        case ScalarWebEvent.NOTIFYEXTERNALTERMINALSTATUS:
+            notifyCurrentTerminalStatus(event.as(CurrentExternalTerminalsStatus_1_0.class));
+            break;
 
-            default:
-                logger.debug("Unhandled event received: {}", event);
-                break;
+        default:
+            logger.debug("Unhandled event received: {}", event);
+            break;
         }
     }
 
@@ -1213,51 +1316,59 @@ class ScalarWebAvContentProtocol<T extends ThingCallback<String>> extends Abstra
      * @return the non-null, possibly empty list of sources
      */
     private Set<Source> getSources(boolean refresh) {
-        final Set<Source> sources = new HashSet<>();
-
-        for (Scheme scheme : getSchemes()) {
-            final String schemeName = scheme.getScheme();
-            if (schemeName != null && StringUtils.isNotEmpty(schemeName)) {
-                final Set<Source> schemeSources = stateSources.compute(schemeName, (k, v) -> {
-                    if (v != null && !v.isEmpty() && !refresh) {
-                        return v;
-                    }
-
-                    final Set<Source> srcs = new HashSet<>();
-                    try {
-                        for (final String version : getService().getVersions(ScalarWebMethod.GETSOURCELIST)) {
-                            final ScalarWebResult result = getService().executeSpecific(ScalarWebMethod.GETSOURCELIST,
-                                    version, scheme);
-
-                            // This can happen if the specific version source doesn't support the scheme for
-                            if (result.getDeviceErrorCode() == ScalarWebError.NOTIMPLEMENTED
-                                    || result.getDeviceErrorCode() == ScalarWebError.UNSUPPORTEDOPERATION
-                                    || result.getDeviceErrorCode() == ScalarWebError.ILLEGALARGUMENT) {
-                                logger.trace("Source version {} for scheme {} is not implemented", version, scheme);
-                            } else {
-                                for (Source src : result.asArray(Source.class)) {
-                                    final String sourceName = src.getSource();
-                                    if (sourceName != null && StringUtils.isNotEmpty(sourceName)) {
-                                        srcs.add(src);
-                                    }
-                                }
-                            }
-                        }
-                    } catch (IOException e) {
-                        logger.debug("Exception occurred retrieving the source list for scheme {}: {}", scheme,
-                                e.getMessage());
-                    }
-                    return srcs;
-                });
-                sources.addAll(schemeSources);
-            }
-        }
+        final Set<Source> sources = getSchemes().stream().flatMap(s -> getSources(s, refresh).stream())
+                .collect(Collectors.toSet());
 
         if (refresh) {
             updateTermSource();
         }
 
         return sources;
+    }
+
+    private Set<Source> getSources(Scheme scheme) {
+        Objects.requireNonNull(scheme, "scheme cannot be null");
+        return getSources(scheme, false);
+    }
+
+    private Set<Source> getSources(Scheme scheme, boolean refresh) {
+        Objects.requireNonNull(scheme, "scheme cannot be null");
+
+        final String schemeName = scheme.getScheme();
+        if (schemeName == null || StringUtils.isEmpty(schemeName)) {
+            return Collections.emptySet();
+        }
+
+        return stateSources.compute(scheme.getScheme(), (k, v) -> {
+            if (v != null && !v.isEmpty() && !refresh) {
+                return v;
+            }
+
+            final Set<Source> srcs = new HashSet<>();
+            try {
+                for (final String version : getService().getVersions(ScalarWebMethod.GETSOURCELIST)) {
+                    final ScalarWebResult result = getService().executeSpecific(ScalarWebMethod.GETSOURCELIST, version,
+                            scheme);
+
+                    // This can happen if the specific version source doesn't support the scheme for
+                    if (result.getDeviceErrorCode() == ScalarWebError.NOTIMPLEMENTED
+                            || result.getDeviceErrorCode() == ScalarWebError.UNSUPPORTEDOPERATION
+                            || result.getDeviceErrorCode() == ScalarWebError.ILLEGALARGUMENT) {
+                        logger.trace("Source version {} for scheme {} is not implemented", version, scheme);
+                    } else {
+                        for (Source src : result.asArray(Source.class)) {
+                            final String sourceName = src.getSource();
+                            if (sourceName != null && StringUtils.isNotEmpty(sourceName)) {
+                                srcs.add(src);
+                            }
+                        }
+                    }
+                }
+            } catch (IOException e) {
+                logger.debug("Exception occurred retrieving the source list for scheme {}: {}", scheme, e.getMessage());
+            }
+            return srcs;
+        });
     }
 
     private void updateTermSource() {
@@ -1305,14 +1416,16 @@ class ScalarWebAvContentProtocol<T extends ThingCallback<String>> extends Abstra
                     final List<StateOption> options = sources.stream()
                             .filter(s -> s.outputs.size() == 0 || s.outputs.contains(uri))
                             .map(s -> new StateOption(s.uri, s.title == null ? s.uri : s.title))
-                            .sorted((a, b) -> ObjectUtils.compare(a.getLabel(), b.getLabel())).collect(Collectors.toList());
+                            .sorted((a, b) -> ObjectUtils.compare(a.getLabel(), b.getLabel()))
+                            .collect(Collectors.toList());
 
                     final String id = getIdForOutput(uri);
                     final ScalarWebChannel cnl = createChannel(TERM_SOURCE, id, uri);
-                    final StateDescription sd = StateDescriptionFragmentBuilder.create().withOptions(options).build().toStateDescription();
+                    final StateDescription sd = StateDescriptionFragmentBuilder.create().withOptions(options).build()
+                            .toStateDescription();
                     if (sd != null) {
                         getContext().getStateProvider().addStateOverride(getContext().getThingUID(),
-                            getContext().getMapper().getMappedChannelId(cnl.getChannelId()), sd);
+                                getContext().getMapper().getMappedChannelId(cnl.getChannelId()), sd);
                     }
                 }
             }
@@ -2178,6 +2291,17 @@ class ScalarWebAvContentProtocol<T extends ThingCallback<String>> extends Abstra
             } else {
                 logger.debug("{} command not an StringType: {}", PL_CMD, command);
             }
+        } else if (StringUtils.equalsIgnoreCase(channel.getCategory(), PS_CHANNEL)) {
+            final String srcId = channel.getPathPart(0);
+            if (srcId == null || StringUtils.isEmpty(srcId)) {
+                logger.debug("{} command - channel has no srcId: {}", PS_CHANNEL, channel);
+                return;
+            }
+            if (command instanceof StringType) {
+                setPlayPredefined(srcId, command.toString());
+            } else {
+                logger.debug("{} command not an StringType: {}", PL_CMD, command);
+            }
         } else if (StringUtils.equalsIgnoreCase(channel.getCategory(), PL_PRESET)) {
             final String output = channel.getId();
             if (command instanceof DecimalType) {
@@ -2199,81 +2323,81 @@ class ScalarWebAvContentProtocol<T extends ThingCallback<String>> extends Abstra
                 return;
             }
             switch (channel.getCategory()) {
-                case TERM_SOURCE: {
-                    if (command instanceof StringType) {
-                        setTerminalSource(uri, command.toString());
-                    } else {
-                        logger.debug("{} command not an StringType: {}", TERM_SOURCE, command);
-                    }
-                    break;
+            case TERM_SOURCE: {
+                if (command instanceof StringType) {
+                    setTerminalSource(uri, command.toString());
+                } else {
+                    logger.debug("{} command not an StringType: {}", TERM_SOURCE, command);
                 }
-                case TERM_ACTIVE: {
-                    if (command instanceof OnOffType) {
-                        setTerminalStatus(uri, command == OnOffType.ON);
-                    } else {
-                        logger.debug("{} command not an OnOffType: {}", TERM_ACTIVE, command);
-                    }
-                    break;
+                break;
+            }
+            case TERM_ACTIVE: {
+                if (command instanceof OnOffType) {
+                    setTerminalStatus(uri, command == OnOffType.ON);
+                } else {
+                    logger.debug("{} command not an OnOffType: {}", TERM_ACTIVE, command);
                 }
+                break;
+            }
             }
         } else if (StringUtils.startsWith(channel.getCategory(), CONTENT)) {
             switch (channel.getCategory()) {
-                case CN_PARENTURI: {
-                    if (command instanceof StringType) {
-                        stateContent.set(new ContentState(command.toString(), "", 0));
-                        getContext().getScheduler().execute(() -> refreshContent());
-                    } else {
-                        logger.debug("{} command not an OnOffType: {}", CN_ISPROTECTED, command);
-                    }
-                    break;
+            case CN_PARENTURI: {
+                if (command instanceof StringType) {
+                    stateContent.set(new ContentState(command.toString(), "", 0));
+                    getContext().getScheduler().execute(() -> refreshContent());
+                } else {
+                    logger.debug("{} command not an OnOffType: {}", CN_ISPROTECTED, command);
                 }
-                case CN_INDEX: {
-                    if (command instanceof DecimalType) {
-                        stateContent.updateAndGet(
-                                cs -> new ContentState(cs.parentUri, cs.uri, ((DecimalType) command).intValue()));
-                        getContext().getScheduler().execute(() -> refreshContent());
-                    } else {
-                        logger.debug("{} command not an OnOffType: {}", CN_ISPROTECTED, command);
-                    }
-                    break;
+                break;
+            }
+            case CN_INDEX: {
+                if (command instanceof DecimalType) {
+                    stateContent.updateAndGet(
+                            cs -> new ContentState(cs.parentUri, cs.uri, ((DecimalType) command).intValue()));
+                    getContext().getScheduler().execute(() -> refreshContent());
+                } else {
+                    logger.debug("{} command not an OnOffType: {}", CN_ISPROTECTED, command);
                 }
-                case CN_SELECTED: {
-                    final ContentState state = stateContent.get();
-                    setPlayContent(state.uri, null, true);
-                    break;
+                break;
+            }
+            case CN_SELECTED: {
+                final ContentState state = stateContent.get();
+                setPlayContent(state.uri, null, true);
+                break;
+            }
+            case CN_ISPROTECTED: {
+                if (command instanceof OnOffType) {
+                    setContentProtection(command == OnOffType.ON);
+                } else {
+                    logger.debug("{} command not an OnOffType: {}", CN_ISPROTECTED, command);
                 }
-                case CN_ISPROTECTED: {
-                    if (command instanceof OnOffType) {
-                        setContentProtection(command == OnOffType.ON);
-                    } else {
-                        logger.debug("{} command not an OnOffType: {}", CN_ISPROTECTED, command);
-                    }
-                    break;
+                break;
+            }
+            case CN_EPGVISIBILITY: {
+                if (command instanceof StringType) {
+                    setTvContentVisibility(command.toString(), null, null);
+                } else {
+                    logger.debug("{} command not an StringType: {}", CN_EPGVISIBILITY, command);
                 }
-                case CN_EPGVISIBILITY: {
-                    if (command instanceof StringType) {
-                        setTvContentVisibility(command.toString(), null, null);
-                    } else {
-                        logger.debug("{} command not an StringType: {}", CN_EPGVISIBILITY, command);
-                    }
-                    break;
+                break;
+            }
+            case CN_CHANNELSURFINGVISIBILITY: {
+                if (command instanceof StringType) {
+                    setTvContentVisibility(null, command.toString(), null);
+                } else {
+                    logger.debug("{} command not an StringType: {}", CN_CHANNELSURFINGVISIBILITY, command);
                 }
-                case CN_CHANNELSURFINGVISIBILITY: {
-                    if (command instanceof StringType) {
-                        setTvContentVisibility(null, command.toString(), null);
-                    } else {
-                        logger.debug("{} command not an StringType: {}", CN_CHANNELSURFINGVISIBILITY, command);
-                    }
-                    break;
+                break;
+            }
+            case CN_VISIBILITY: {
+                if (command instanceof StringType) {
+                    setTvContentVisibility(null, null, command.toString());
+                } else {
+                    logger.debug("{} command not an StringType: {}", CN_VISIBILITY, command);
                 }
-                case CN_VISIBILITY: {
-                    if (command instanceof StringType) {
-                        setTvContentVisibility(null, null, command.toString());
-                    } else {
-                        logger.debug("{} command not an StringType: {}", CN_VISIBILITY, command);
-                    }
-                    break;
-                }
+                break;
+            }
             }
         }
     }
@@ -2292,6 +2416,7 @@ class ScalarWebAvContentProtocol<T extends ThingCallback<String>> extends Abstra
      * Sets the content status to playing or not
      *
      * @param uri the non-null, possibly empty URI
+     * @param output the possibly null, possibly empty output to play on
      * @param on  true if playing, false otherwise
      */
     private void setPlayContent(String uri, @Nullable String output, boolean on) {
@@ -2323,76 +2448,74 @@ class ScalarWebAvContentProtocol<T extends ThingCallback<String>> extends Abstra
         final boolean isRadio = Scheme.matches(Scheme.RADIO, playingUri);
 
         switch (command.toLowerCase()) {
-            case "play":
-                setPlayContent(playingUri, translatedOutput, true);
-                break;
+        case "play":
+            setPlayContent(playingUri, translatedOutput, true);
+            break;
 
-            case "pause":
-                handleExecute(ScalarWebMethod.PAUSEPLAYINGCONTENT, new Output(translatedOutput));
-                break;
+        case "pause":
+            handleExecute(ScalarWebMethod.PAUSEPLAYINGCONTENT, new Output(translatedOutput));
+            break;
 
-            case "stop":
-                setPlayContent(playingUri, translatedOutput, false);
-                break;
+        case "stop":
+            setPlayContent(playingUri, translatedOutput, false);
+            break;
 
-            case "next":
-                handleExecute(ScalarWebMethod.SETPLAYNEXTCONTENT, new Output(translatedOutput));
-                break;
+        case "next":
+            handleExecute(ScalarWebMethod.SETPLAYNEXTCONTENT, new Output(translatedOutput));
+            break;
 
-            case "prev":
-                if (isRadio) {
-                    handleExecute(ScalarWebMethod.SCANPLAYINGCONTENT,
-                            new ScanPlayingContent_1_0(false, translatedOutput));
-                } else {
-                    handleExecute(ScalarWebMethod.SETPLAYPREVIOUSCONTENT, new Output(translatedOutput));
-                }
-                break;
+        case "prev":
+            if (isRadio) {
+                handleExecute(ScalarWebMethod.SCANPLAYINGCONTENT, new ScanPlayingContent_1_0(false, translatedOutput));
+            } else {
+                handleExecute(ScalarWebMethod.SETPLAYPREVIOUSCONTENT, new Output(translatedOutput));
+            }
+            break;
 
-            case "fwd":
-                if (isRadio) {
-                    handleExecute(ScalarWebMethod.SEEKBROADCASTSTATION, new SeekBroadcastStation_1_0(true, false));
-                } else {
-                    handleExecute(ScalarWebMethod.SCANPLAYINGCONTENT,
-                            new ScanPlayingContent_1_0(true, translatedOutput));
-                }
-                break;
+        case "fwd":
+            if (isRadio) {
+                handleExecute(ScalarWebMethod.SEEKBROADCASTSTATION, new SeekBroadcastStation_1_0(true, false));
+            } else {
+                handleExecute(ScalarWebMethod.SCANPLAYINGCONTENT, new ScanPlayingContent_1_0(true, translatedOutput));
+            }
+            break;
 
-            case "bwd":
-                handleExecute(ScalarWebMethod.SEEKBROADCASTSTATION, new SeekBroadcastStation_1_0(false, false));
-                break;
+        case "bwd":
+            handleExecute(ScalarWebMethod.SEEKBROADCASTSTATION, new SeekBroadcastStation_1_0(false, false));
+            break;
 
-            case "fwdseek":
-                handleExecute(ScalarWebMethod.SEEKBROADCASTSTATION, new SeekBroadcastStation_1_0(true, true));
-                break;
+        case "fwdseek":
+            handleExecute(ScalarWebMethod.SEEKBROADCASTSTATION, new SeekBroadcastStation_1_0(true, true));
+            break;
 
-            case "bwdseek":
-                handleExecute(ScalarWebMethod.SEEKBROADCASTSTATION, new SeekBroadcastStation_1_0(false, true));
-                break;
+        case "bwdseek":
+            handleExecute(ScalarWebMethod.SEEKBROADCASTSTATION, new SeekBroadcastStation_1_0(false, true));
+            break;
 
-            case "setpreset":
-                final Matcher ms = Source.RADIOPATTERN.matcher(playingUri);
-                if (ms.matches()) {
-                    final int preset = state == null ? 1 : state.preset;
-                    final String presetUri = ms.replaceFirst("$1" + preset);
-                    handleExecute(ScalarWebMethod.PRESETBROADCASTSTATION, new PresetBroadcastStation(presetUri));
-                } else {
-                    logger.debug("Not playing a radio currently");
-                }
-                break;
+        case "setpreset":
+            final Matcher ms = Source.RADIOPATTERN.matcher(playingUri);
+            if (ms.matches()) {
+                final int preset = state == null ? 1 : state.preset;
+                final String presetUri = ms.replaceFirst("$1" + preset);
+                handleExecute(ScalarWebMethod.PRESETBROADCASTSTATION, new PresetBroadcastStation(presetUri));
+            } else {
+                logger.debug("Not playing a radio currently");
+            }
+            break;
 
-            case "getpreset":
-                final Matcher mg = Source.RADIOPATTERN.matcher(playingUri);
-                if (mg.matches()) {
-                    final int preset = state == null ? 1 : state.preset;
-                    final String presetUri = mg.replaceFirst("$1" + preset);
-                    setPlayContent(presetUri, translatedOutput, true);
-                } else {
-                    logger.debug("Not playing a radio currently");
-                }
-                break;
+        case "getpreset":
+            final Matcher mg = Source.RADIOPATTERN.matcher(playingUri);
+            if (mg.matches()) {
+                final int preset = state == null ? 1 : state.preset;
+                final String presetUri = mg.replaceFirst("$1" + preset);
+                setPlayContent(presetUri, translatedOutput, true);
+            } else {
+                logger.debug("Not playing a radio currently");
+            }
+            break;
 
-            default:
-                break;
+        default:
+            break;
         }
     }
 
@@ -2441,7 +2564,79 @@ class ScalarWebAvContentProtocol<T extends ThingCallback<String>> extends Abstra
                 new TvContentVisibility(cs.uri, epgVisibility, channelSurfingVisibility, visibility));
     }
 
+    private void setPlayPredefined(String srcId, String dispName) {
+        Validate.notEmpty(srcId, "srcId cannot be empty");
+        Validate.notEmpty(dispName, "dispName cannot be empty");
+
+        Count ct;
+        try {
+            ct = execute(ScalarWebMethod.GETCONTENTCOUNT, version -> {
+                if (VersionUtilities.equals(version, ScalarWebMethod.V1_0, ScalarWebMethod.V1_1,
+                        ScalarWebMethod.V1_2)) {
+                    return new ContentCount_1_0(srcId);
+                }
+                return new ContentCount_1_3(srcId);
+            }).as(Count.class);
+
+        } catch (IOException e) {
+            ct = new Count(0);
+        }
+
+        ContentListResult_1_0 presetResult = null;
+        try {
+            final int i = ct.getCount();
+            final int max = i + ((i % MAX_CT == 0 ? 0 : 1) * MAX_CT);
+            for (int idx = 0; idx < max; idx += MAX_CT) {
+                final int localIdx = idx;
+                final ScalarWebResult res = execute(ScalarWebMethod.GETCONTENTLIST, version -> {
+                    if (VersionUtilities.equals(version, ScalarWebMethod.V1_0, ScalarWebMethod.V1_1,
+                            ScalarWebMethod.V1_2, ScalarWebMethod.V1_3)) {
+                        return new ContentListRequest_1_0(srcId, localIdx, MAX_CT);
+                    }
+                    return new ContentListRequest_1_4(srcId, localIdx, MAX_CT);
+                });
+
+                for (ContentListResult_1_0 clr : res.asArray(ContentListResult_1_0.class)) {
+                    if (StringUtils.equalsIgnoreCase(dispName, clr.getDispNum())) {
+                        presetResult = clr;
+                        idx = 99999999;
+                        break;
+                    }
+                }
+            }
+        } catch (IOException e) {
+
+        }
+
+        if (presetResult != null) {
+            setPlayContent(presetResult.getUri(), null, true);
+        }
+    }
+    private String getChannelId(ChannelIdCache cache, String id, String altId) {
+        Objects.requireNonNull(cache, "cache cannot be null");
+        Validate.notEmpty(id, "id cannot be empty");
+        Validate.notEmpty(altId, "altId cannot be empty");
+
+        final int idx = id.indexOf(":");
+        if (idx >= 0) {
+            final String source = id.substring(idx + 1);
+            final int parmIdx = source.indexOf("?");
+            if (parmIdx >= 0) {
+                final String src = source.substring(0, parmIdx);
+                final Matcher matcher = PORT_MATCHER.matcher(source.substring(parmIdx + 1));
+                final String port = matcher.matches() && matcher.groupCount() > 0 ? matcher.group(1) : "";
+                return cache.getUniqueChannelId(src + port);
+            } else {
+                return cache.getUniqueChannelId(source);
+            }
+        } else {
+            return cache.getUniqueChannelId(altId);
+        }
+    }
+
     private Map<String, String> getTerminalOutputs(List<CurrentExternalTerminalsStatus_1_0> terms) {
+        Objects.requireNonNull(terms, "terms cannot be nul");
+
         final Map<String, String> outputs = new HashMap<>();
         for (CurrentExternalTerminalsStatus_1_0 term : terms) {
             final String uri = term.getUri();

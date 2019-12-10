@@ -14,12 +14,14 @@ package org.openhab.binding.sony.internal.scalarweb.protocols;
 
 import java.io.File;
 import java.io.IOException;
+import java.net.URISyntaxException;
 import java.net.URLEncoder;
 import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
@@ -34,8 +36,10 @@ import org.eclipse.jdt.annotation.Nullable;
 import org.eclipse.jetty.http.HttpStatus;
 import org.eclipse.smarthome.config.core.ConfigConstants;
 import org.eclipse.smarthome.core.transform.TransformationService;
-import org.openhab.binding.sony.internal.AccessCheckResult;
+import org.openhab.binding.sony.internal.AccessResult;
+import org.openhab.binding.sony.internal.CheckResult;
 import org.openhab.binding.sony.internal.SonyAuth;
+import org.openhab.binding.sony.internal.SonyAuthChecker;
 import org.openhab.binding.sony.internal.SonyUtil;
 import org.openhab.binding.sony.internal.ThingCallback;
 import org.openhab.binding.sony.internal.ircc.models.IrccClient;
@@ -56,6 +60,7 @@ import org.openhab.binding.sony.internal.scalarweb.models.api.RemoteControllerIn
 import org.openhab.binding.sony.internal.scalarweb.models.api.RemoteControllerInfo.RemoteCommand;
 import org.openhab.binding.sony.internal.scalarweb.models.api.SystemInformation;
 import org.openhab.binding.sony.internal.simpleip.SimpleIpConfig;
+import org.openhab.binding.sony.internal.transports.SonyTransport;
 import org.openhab.binding.sony.internal.transports.TransportOptionAutoAuth;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -116,7 +121,7 @@ public class ScalarWebLoginProtocol<T extends ThingCallback<String>> {
             try {
                 SonyUtil.sendWakeOnLan(logger, config.getDeviceIpAddress(), config.getDeviceMacAddress());
                 return irccUrl == null || StringUtils.isEmpty(irccUrl) ? null : new IrccClient(irccUrl);
-            } catch (IOException e) {
+            } catch (IOException | URISyntaxException e) {
                 logger.debug("Cannot create IRCC Client: {}", e.getMessage());
                 return null;
             }
@@ -140,51 +145,91 @@ public class ScalarWebLoginProtocol<T extends ThingCallback<String>> {
      * @throws ParserConfigurationException the parser configuration exception
      * @throws SAXException                 the SAX exception
      */
-    public AccessCheckResult login() throws IOException, ParserConfigurationException, SAXException {
+    public AccessResult login() throws IOException, ParserConfigurationException, SAXException {
         final ScalarWebService accessControl = scalarClient.getService(ScalarWebService.ACCESSCONTROL);
         if (accessControl == null) {
-            return AccessCheckResult.SERVICEMISSING;
+            return AccessResult.SERVICEMISSING;
         }
 
-        // turn off auto authorization for all services
-        for (ScalarWebService srv : scalarClient.getDevice().getServices()) {
-            srv.getTransport().setOption(TransportOptionAutoAuth.FALSE);
+        final ScalarWebService systemService = scalarClient.getService(ScalarWebService.SYSTEM);
+        if (systemService == null) {
+            return AccessResult.SERVICEMISSING;
         }
+
+        final SonyTransport[] transports = scalarClient.getDevice().getServices().stream()
+                .map(srv -> srv.getTransport()).toArray(SonyTransport[]::new);
+
+        // turn off auto authorization for all services
+        Arrays.stream(transports).forEach(t -> t.setOption(TransportOptionAutoAuth.FALSE));
 
         SonyUtil.sendWakeOnLan(logger, config.getDeviceIpAddress(), config.getDeviceMacAddress());
 
-        final AccessCheckResult result = checkAccess();
-        if (result != AccessCheckResult.OK) {
-            if (result == AccessCheckResult.DISPLAYOFF) {
-                return result;
+        final String accessCode = config.getAccessCode();
+        final SonyAuthChecker authChecker = new SonyAuthChecker(systemService.getTransport(), accessCode);
+        final CheckResult checkResult = authChecker.checkResult(() -> {
+            // Some devices have power status unprotected - so check device mode first
+            // if device mode isn't implement, check power status (which will probably be protected
+            // or not protected if webconnect)
+            ScalarWebResult result = systemService.execute(ScalarWebMethod.GETDEVICEMODE);
+            if (result.getDeviceErrorCode() == ScalarWebError.NOTIMPLEMENTED) {
+                result = systemService.execute(ScalarWebMethod.GETPOWERSTATUS);
             }
 
-            if (result == AccessCheckResult.NEEDSPAIRING) {
-                final String accessCode = config.getAccessCode();
-                if (StringUtils.isEmpty(accessCode)) {
-                    return new AccessCheckResult(AccessCheckResult.OTHER, "Access code cannot be blank");
-                } else {
-                    final AccessCheckResult res = sonyAuth.requestAccess(accessControl.getTransport(),
-                            StringUtils.equalsIgnoreCase(ScalarWebConstants.ACCESSCODE_RQST, accessCode) ? null
-                                    : accessCode);
-                    if (res == AccessCheckResult.OK) {
-                        // GOOD!
-                    } else {
-                        return res;
-                    }
-                }
+            if (result.getDeviceErrorCode() == ScalarWebError.DISPLAYISOFF) {
+                return AccessResult.DISPLAYOFF;
+            }
+
+            final HttpResponse httpResponse = result.getHttpResponse();
+
+            // Either a 200 (good call) or an illegalargument (it tried to run it but it's arguments were not good) is
+            // good
+            if (httpResponse.getHttpCode() == HttpStatus.OK_200
+                    || result.getDeviceErrorCode() == ScalarWebError.ILLEGALARGUMENT) {
+                return AccessResult.OK;
+            }
+
+            if (result.getDeviceErrorCode() == ScalarWebError.NOTIMPLEMENTED
+                    || httpResponse.getHttpCode() == HttpStatus.UNAUTHORIZED_401
+                    || httpResponse.getHttpCode() == HttpStatus.FORBIDDEN_403
+                    || result.getDeviceErrorCode() == ScalarWebError.FORBIDDEN) {
+                return AccessResult.NEEDSPAIRING;
+            }
+
+            return new AccessResult(httpResponse);
+        });
+
+        if (CheckResult.OK_HEADER.equals(checkResult)) {
+            if (accessCode == null || StringUtils.isEmpty(accessCode)) {
+                // This shouldn't happen - if our check result is OK_HEADER, then
+                // we had a valid (non-null, non-empty) accessCode. Unfortunately
+                // nullable checking thinks this can be null now.
+                logger.debug("This shouldn't happen - access code is blank!: {}", accessCode);
+                return new AccessResult(AccessResult.OTHER, "Access code cannot be blank");
             } else {
-                final AccessCheckResult resp = sonyAuth.registerRenewal(accessControl.getTransport());
-                if (resp != AccessCheckResult.OK) {
-                    // Use configuration_error - prevents handler from continually trying to
-                    // reconnect
-                    return resp;
+                SonyAuth.setupHeader(accessCode, transports);
+            }
+        } else if (CheckResult.OK_COOKIE.equals(checkResult)) {
+            SonyAuth.setupCookie(transports);
+        } else if (AccessResult.DISPLAYOFF.equals(checkResult)) {
+            return checkResult;
+        } else if (AccessResult.NEEDSPAIRING.equals(checkResult)) {
+            if (StringUtils.isEmpty(accessCode)) {
+                return new AccessResult(AccessResult.OTHER, "Access code cannot be blank");
+            } else {
+                final AccessResult res = sonyAuth.requestAccess(accessControl.getTransport(),
+                        StringUtils.equalsIgnoreCase(ScalarWebConstants.ACCESSCODE_RQST, accessCode) ? null
+                                : accessCode);
+                if (AccessResult.OK.equals(res)) {
+                    SonyAuth.setupCookie(transports);
+                } else {
+                    return res;
                 }
             }
         }
 
         postLogin();
-        return AccessCheckResult.OK;
+        return AccessResult.OK;
+
     }
 
     /**
@@ -197,11 +242,6 @@ public class ScalarWebLoginProtocol<T extends ThingCallback<String>> {
     private void postLogin() throws ParserConfigurationException, SAXException, IOException {
         logger.debug("WebScalar System now connected");
 
-        // turn on auto authorization for all services
-        for (ScalarWebService srv : scalarClient.getDevice().getServices()) {
-            srv.getTransport().setOption(TransportOptionAutoAuth.TRUE);
-        }
-
         final ScalarWebService sysService = scalarClient.getService(ScalarWebService.SYSTEM);
         Objects.requireNonNull(sysService, "sysService is null - shouldn't happen since it's checked in login()");
 
@@ -209,22 +249,19 @@ public class ScalarWebLoginProtocol<T extends ThingCallback<String>> {
             final ScalarWebResult sysResult = sysService.execute(ScalarWebMethod.GETSYSTEMINFORMATION);
             if (!sysResult.isError() && sysResult.hasResults()) {
                 final SystemInformation sysInfo = sysResult.as(SystemInformation.class);
-                callback.setProperty(ScalarWebConstants.PROP_PRODUCT,
-                        SonyUtil.convertNull(sysInfo.getProduct(), NOTAVAILABLE));
-                callback.setProperty(ScalarWebConstants.PROP_NAME,
-                        SonyUtil.convertNull(sysInfo.getName(), NOTAVAILABLE));
-                callback.setProperty(ScalarWebConstants.PROP_MODEL,
-                        SonyUtil.convertNull(sysInfo.getModel(), NOTAVAILABLE));
-                callback.setProperty(ScalarWebConstants.PROP_GENERATION,
-                        SonyUtil.convertNull(sysInfo.getGeneration(), NOTAVAILABLE));
-                callback.setProperty(ScalarWebConstants.PROP_SERIAL,
-                        SonyUtil.convertNull(sysInfo.getSerial(), NOTAVAILABLE));
-                callback.setProperty(ScalarWebConstants.PROP_MACADDR,
-                        SonyUtil.convertNull(sysInfo.getMacAddr(), NOTAVAILABLE));
-                callback.setProperty(ScalarWebConstants.PROP_AREA,
-                        SonyUtil.convertNull(sysInfo.getArea(), NOTAVAILABLE));
-                callback.setProperty(ScalarWebConstants.PROP_REGION,
-                        SonyUtil.convertNull(sysInfo.getRegion(), NOTAVAILABLE));
+                callback.setProperty(ScalarWebConstants.PROP_PRODUCT, sysInfo.getProduct());
+                callback.setProperty(ScalarWebConstants.PROP_NAME, sysInfo.getName());
+
+                final String modelName = sysInfo.getModel();
+                if (modelName != null && SonyUtil.isValidModelName(modelName)) {
+                    callback.setProperty(ScalarWebConstants.PROP_MODEL, modelName);
+                }
+                
+                callback.setProperty(ScalarWebConstants.PROP_GENERATION, sysInfo.getGeneration());
+                callback.setProperty(ScalarWebConstants.PROP_SERIAL, sysInfo.getSerial());
+                callback.setProperty(ScalarWebConstants.PROP_MACADDR, sysInfo.getMacAddr());
+                callback.setProperty(ScalarWebConstants.PROP_AREA, sysInfo.getArea());
+                callback.setProperty(ScalarWebConstants.PROP_REGION, sysInfo.getRegion());
             }
         }
 
@@ -232,12 +269,9 @@ public class ScalarWebLoginProtocol<T extends ThingCallback<String>> {
             final ScalarWebResult intResult = sysService.execute(ScalarWebMethod.GETINTERFACEINFORMATION);
             if (!intResult.isError() && intResult.hasResults()) {
                 final InterfaceInformation intInfo = intResult.as(InterfaceInformation.class);
-                callback.setProperty(ScalarWebConstants.PROP_INTERFACEVERSION,
-                        SonyUtil.convertNull(intInfo.getInterfaceVersion(), NOTAVAILABLE));
-                callback.setProperty(ScalarWebConstants.PROP_PRODUCTCATEGORY,
-                        SonyUtil.convertNull(intInfo.getProductCategory(), NOTAVAILABLE));
-                callback.setProperty(ScalarWebConstants.PROP_SERVERNAME,
-                        SonyUtil.convertNull(intInfo.getServerName(), NOTAVAILABLE));
+                callback.setProperty(ScalarWebConstants.PROP_INTERFACEVERSION, intInfo.getInterfaceVersion());
+                callback.setProperty(ScalarWebConstants.PROP_PRODUCTCATEGORY, intInfo.getProductCategory());
+                callback.setProperty(ScalarWebConstants.PROP_SERVERNAME, intInfo.getServerName());
             }
         }
 
@@ -246,66 +280,18 @@ public class ScalarWebLoginProtocol<T extends ThingCallback<String>> {
                 final ScalarWebResult swr = sysService.execute(ScalarWebMethod.GETNETWORKSETTINGS, new NetIf(netIf));
                 if (!swr.isError() && swr.hasResults()) {
                     final NetworkSetting netSetting = swr.as(NetworkSetting.class);
-                    callback.setProperty(ScalarWebConstants.PROP_NETIF,
-                            SonyUtil.convertNull(netSetting.getNetif(), NOTAVAILABLE));
-                    callback.setProperty(ScalarWebConstants.PROP_HWADDRESS,
-                            SonyUtil.convertNull(netSetting.getHwAddr(), NOTAVAILABLE));
-                    callback.setProperty(ScalarWebConstants.PROP_IPV4,
-                            SonyUtil.convertNull(netSetting.getIpAddrV4(), NOTAVAILABLE));
-                    callback.setProperty(ScalarWebConstants.PROP_IPV6,
-                            SonyUtil.convertNull(netSetting.getIpAddrV6(), NOTAVAILABLE));
-                    callback.setProperty(ScalarWebConstants.PROP_NETMASK,
-                            SonyUtil.convertNull(netSetting.getNetmask(), NOTAVAILABLE));
-                    callback.setProperty(ScalarWebConstants.PROP_GATEWAY,
-                            SonyUtil.convertNull(netSetting.getGateway(), NOTAVAILABLE));
+                    callback.setProperty(ScalarWebConstants.PROP_NETIF, netSetting.getNetif());
+                    callback.setProperty(ScalarWebConstants.PROP_HWADDRESS, netSetting.getHwAddr());
+                    callback.setProperty(ScalarWebConstants.PROP_IPV4, netSetting.getIpAddrV4());
+                    callback.setProperty(ScalarWebConstants.PROP_IPV6, netSetting.getIpAddrV6());
+                    callback.setProperty(ScalarWebConstants.PROP_NETMASK, netSetting.getNetmask());
+                    callback.setProperty(ScalarWebConstants.PROP_GATEWAY, netSetting.getGateway());
                     break;
                 }
             }
         }
 
         writeCommands(sysService);
-    }
-
-    /**
-     * Check device access.
-     *
-     * @return the non-null access check result
-     * @throws IOException Signals that an I/O exception has occurred.
-     */
-    private AccessCheckResult checkAccess() throws IOException {
-        final ScalarWebService systemService = scalarClient.getService(ScalarWebService.SYSTEM);
-        if (systemService == null) {
-            return AccessCheckResult.SERVICEMISSING;
-        }
-
-        // Some devices have power status unprotected - so check device mode first
-        // if device mode isn't implement, check power status (which will probably be protected
-        // or not protected if webconnect)
-        ScalarWebResult result = systemService.execute(ScalarWebMethod.GETDEVICEMODE);
-        if (result.getDeviceErrorCode() == ScalarWebError.NOTIMPLEMENTED) {
-            result = systemService.execute(ScalarWebMethod.GETPOWERSTATUS);
-        }
-
-        if (result.getDeviceErrorCode() == ScalarWebError.DISPLAYISOFF) {
-            return AccessCheckResult.DISPLAYOFF;
-        }
-
-        final HttpResponse httpResponse = result.getHttpResponse();
-
-        // Either a 200 (good call) or an illegalargument (it tried to run it but it's arguments were not good) is good
-        if (httpResponse.getHttpCode() == HttpStatus.OK_200
-                || result.getDeviceErrorCode() == ScalarWebError.ILLEGALARGUMENT) {
-            return AccessCheckResult.OK;
-        }
-
-        if (result.getDeviceErrorCode() == ScalarWebError.NOTIMPLEMENTED
-                || httpResponse.getHttpCode() == HttpStatus.UNAUTHORIZED_401
-                || httpResponse.getHttpCode() == HttpStatus.FORBIDDEN_403
-                || result.getDeviceErrorCode() == ScalarWebError.FORBIDDEN) {
-            return AccessCheckResult.NEEDSPAIRING;
-        }
-
-        return new AccessCheckResult(httpResponse);
     }
 
     /**
@@ -371,7 +357,7 @@ public class ScalarWebLoginProtocol<T extends ThingCallback<String>> {
                                 lines.add(v.getName() + "=" + URLEncoder.encode(v.getCmd(), "UTF-8"));
                             }
                         }
-                    } catch (IOException e) {
+                    } catch (IOException | URISyntaxException e) {
                         logger.debug("Exception creating IRCC client: {}", e.getMessage(), e);
                     }
                 }

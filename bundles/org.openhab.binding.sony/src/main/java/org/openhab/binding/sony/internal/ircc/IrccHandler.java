@@ -13,6 +13,7 @@
 package org.openhab.binding.sony.internal.ircc;
 
 import java.io.IOException;
+import java.net.URISyntaxException;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -234,7 +235,7 @@ public class IrccHandler extends AbstractThingHandler<IrccConfig> {
 
     @Override
     protected void connect() {
-        final IrccConfig config = getThing().getConfiguration().as(IrccConfig.class);
+        final IrccConfig config = getSonyConfig();
 
         if (StringUtils.isEmpty(config.getDeviceAddress())) {
             updateStatus(ThingStatus.OFFLINE, ThingStatusDetail.CONFIGURATION_ERROR,
@@ -258,7 +259,7 @@ public class IrccHandler extends AbstractThingHandler<IrccConfig> {
                         }
 
                         @Override
-                        public void setProperty(String propertyName, String propertyValue) {
+                        public void setProperty(String propertyName, @Nullable String propertyValue) {
                             getThing().setProperty(propertyName, propertyValue);
                         }
                     });
@@ -274,7 +275,7 @@ public class IrccHandler extends AbstractThingHandler<IrccConfig> {
             } else {
                 updateStatus(ThingStatus.OFFLINE, response.getThingStatusDetail(), response.getMessage());
             }
-        } catch (IOException | ProcessingException e) {
+        } catch (IOException | ProcessingException | URISyntaxException e) {
             updateStatus(ThingStatus.OFFLINE, ThingStatusDetail.COMMUNICATION_ERROR,
                     "Error connecting to IRCC device (may need to turn it on manually): " + e.getMessage());
         } catch (InterruptedException e) {

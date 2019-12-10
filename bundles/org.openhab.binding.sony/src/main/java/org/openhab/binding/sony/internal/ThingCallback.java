@@ -51,7 +51,7 @@ public interface ThingCallback<T> {
      * Callback to set a property in the bridge/thing.
      *
      * @param propertyName a non-null, non-empty property name
-     * @param propertyValue a non-null, possibly empty property value
+     * @param propertyValue a possibly null, possibly empty property value
      */
-    void setProperty(String propertyName, String propertyValue);
+    void setProperty(String propertyName, @Nullable String propertyValue);
 }

@@ -14,6 +14,7 @@
 			<channel id="state" typeId="dialState" />
 		</channels>
 
+		<representation-property>DialUDN</representation-property>
 		<config-description-ref uri="thing-type:sony:dialconfig" />
 	</thing-type>
 

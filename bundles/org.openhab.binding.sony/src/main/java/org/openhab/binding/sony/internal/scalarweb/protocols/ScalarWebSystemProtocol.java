@@ -14,6 +14,7 @@ package org.openhab.binding.sony.internal.scalarweb.protocols;
 
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
+import java.net.URISyntaxException;
 import java.net.URLDecoder;
 import java.time.ZonedDateTime;
 import java.util.ArrayList;
@@ -582,7 +583,12 @@ class ScalarWebSystemProtocol<T extends ThingCallback<String>> extends AbstractS
                 HttpResponse httpResponse;
                 try (final SonyTransport transport = SonyTransportFactory
                         .createHttpTransport(irccClient.getBaseUrl().toExternalForm())) {
+                    // copy all the options from the parent one (authentication options)
+                    getService().getTransport().getOptions().stream().forEach(o->transport.setOption(o));
                     httpResponse = irccClient.executeSoap(transport, localCmd);
+                } catch (URISyntaxException e) {
+                    logger.debug("URI syntax exception: {}", e.getMessage());
+                    return;
                 }
 
                 switch (httpResponse.getHttpCode()) {
@@ -623,7 +629,7 @@ class ScalarWebSystemProtocol<T extends ThingCallback<String>> extends AbstractS
                         break;
                 }
 
-            } catch (IOException e) {
+            } catch (IOException | URISyntaxException e) {
                 logger.debug("Cannot create IRCC client: {}", e.getMessage(), e);
                 return;
             }

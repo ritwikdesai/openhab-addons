@@ -20,8 +20,13 @@ import java.io.IOException;
 import java.io.PrintWriter;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.AbstractMap;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
+import java.util.TreeSet;
 import java.util.concurrent.Future;
+import java.util.stream.Collectors;
 
 import javax.servlet.http.HttpServletResponse;
 
@@ -34,6 +39,7 @@ import org.eclipse.smarthome.core.library.types.DecimalType;
 import org.eclipse.smarthome.core.library.types.OnOffType;
 import org.eclipse.smarthome.core.library.types.PercentType;
 import org.eclipse.smarthome.core.library.types.StringType;
+import org.eclipse.smarthome.core.thing.ThingTypeUID;
 import org.eclipse.smarthome.core.types.State;
 import org.eclipse.smarthome.core.types.UnDefType;
 import org.openhab.binding.sony.internal.net.NetUtil;
@@ -289,10 +295,11 @@ public class SonyUtil {
     }
 
     /**
-     * Performs a WOL if there is a configured ip address and mac address.  If either ip address or mac address is null/empty, call is ignored
+     * Performs a WOL if there is a configured ip address and mac address. If either ip address or mac address is
+     * null/empty, call is ignored
      * 
-     * @param logger the non-null logger to log messages to
-     * @param deviceIpAddress the possibly null, possibly empty device ip address
+     * @param logger           the non-null logger to log messages to
+     * @param deviceIpAddress  the possibly null, possibly empty device ip address
      * @param deviceMacAddress the possibly null, possibly empty device mac address
      */
     public static void sendWakeOnLan(Logger logger, @Nullable String deviceIpAddress,
@@ -312,7 +319,7 @@ public class SonyUtil {
                     "WOL packet is not supported - specify the IP address and mac address in config if you want a WOL packet sent");
         }
     }
-    
+
     /**
      * Creates a folder if it doesn't already exist
      *
@@ -352,5 +359,154 @@ public class SonyUtil {
 
         logger.trace("Sending: {}", str);
         pw.flush();
+    }
+
+    /**
+     * Returns true if the two maps are: both null or of equal size, all keys and values (case insensitve) match
+     * @param map1 a possibly null, possibly emtpy map
+     * @param map2 a possibly null, possibly emtpy map
+     * @return true if they match, false otherwise
+     */
+    public static boolean equalsIgnoreCase(@Nullable Map<@Nullable String, @Nullable String> map1,
+            @Nullable Map<@Nullable String, @Nullable String> map2) {
+        if (map1 == map2) {
+            return true;
+        }
+
+        if (map2 == null) {
+            return false;
+        }
+
+        if (map1.size() != map2.size()) {
+            return false;
+        }
+
+        final Map<@Nullable String, @Nullable String> lowerMap1 = map1.entrySet().stream()
+                .map(s -> new AbstractMap.SimpleEntry<@Nullable String, @Nullable String>(
+                        StringUtils.lowerCase(s.getKey()), StringUtils.lowerCase(s.getValue())))
+                .collect(Collectors.toMap(k -> k.getKey(), v -> v.getValue()));
+
+        final Map<@Nullable String, @Nullable String> lowerMap2 = map1.entrySet().stream()
+                .map(s -> new AbstractMap.SimpleEntry<@Nullable String, @Nullable String>(
+                        StringUtils.lowerCase(s.getKey()), StringUtils.lowerCase(s.getValue())))
+                .collect(Collectors.toMap(k -> k.getKey(), v -> v.getValue()));
+
+        return lowerMap1.equals(lowerMap2);
+    }
+    
+    /**
+     * Returns true if the two sets are: both null or of equal size and all keys match (case insensitive)
+     * @param set1 a possibly null, possibly empty set
+     * @param set2 a possibly null, possibly empty set
+     * @return true if they match, false otherwise
+     */
+    public static boolean equalsIgnoreCase(@Nullable Set<@Nullable String> set1, @Nullable Set<@Nullable String> set2) {
+        if (set1 == set2) {
+            return true;
+        }
+
+        if (set2 == null) {
+            return false;
+        }
+
+        if (set1.size() != set2.size()) {
+            return false;
+        }
+
+        final TreeSet<@Nullable String> tset1 = new TreeSet<>(String.CASE_INSENSITIVE_ORDER);
+        tset1.addAll(set1);
+        final TreeSet<@Nullable String> tset2 = new TreeSet<>(String.CASE_INSENSITIVE_ORDER);
+        tset2.addAll(set2);
+        return tset1.equals(tset2);
+    }
+
+    /**
+     * Determines if the model name is valid (alphanumeric plus dash)
+     * @param modelName a non-null, possibly empty model name
+     * @return true if a valid model name, false otherwise
+     */
+    public static boolean isValidModelName(String modelName) {
+        return modelName.matches("[A-Za-z0-9-]+")
+            && modelName.matches(".*\\d\\d.*");
+    }
+
+    public static boolean isGenericThingType(ThingTypeUID uid) {
+        Objects.requireNonNull(uid, "uid cannot be null");
+
+        final String typeId = uid.getId();
+        return typeId.indexOf("-") < 0;
+    }
+
+    public static String getServiceName(ThingTypeUID uid) {
+        Objects.requireNonNull(uid, "uid cannot be null");
+
+        final String typeId = uid.getId();
+        final int idx = typeId.indexOf("-");
+
+        return idx < 0 ? typeId : typeId.substring(0, idx);
+    }
+
+    public static @Nullable String getModelName(ThingTypeUID uid) {
+        Objects.requireNonNull(uid, "uid cannot be null");
+
+        final String typeId = uid.getId();
+        final int idx = typeId.indexOf("-");
+
+        return idx < 0 ? null : typeId.substring(idx + 1);
+    }
+
+    public static Integer getModelVersion(ThingTypeUID uid) {
+        Objects.requireNonNull(uid, "uid cannot be null");
+
+        final String modelName = getModelName(uid);
+        if (modelName == null || StringUtils.isEmpty(modelName)) {
+            return 0;
+        }
+
+        final int versIdx = modelName.lastIndexOf(SonyBindingConstants.MODELNAME_VERSION_PREFIX);
+        if (versIdx > 0) {
+            final String vers = modelName.substring(versIdx + 2);
+            try {
+                return Integer.parseInt(vers);
+            } catch (NumberFormatException e) {
+                return 0;
+            }
+        }
+
+        return 0;
+    }
+
+    public static boolean isModelMatch(@Nullable String thingServiceName, @Nullable String thingModelName, String serviceName, String modelName) {
+        Validate.notEmpty(serviceName, "serviceName cannot be empty");
+        Validate.notEmpty(modelName, "modelName cannot be empty");
+        if (thingServiceName == null || StringUtils.isEmpty(thingServiceName)) {
+            return false;
+        }
+
+        if (thingModelName == null || StringUtils.isEmpty(thingModelName)) {
+            return false;
+        }
+
+        String modelPattern = thingModelName.replaceAll("x", ".*").toLowerCase();
+
+        // remove a version identifier ("_V1" or "_V292")
+        final int versIdx = modelPattern.lastIndexOf(SonyBindingConstants.MODELNAME_VERSION_PREFIX.toLowerCase());
+        if (versIdx > 0) {
+            final String vers = modelPattern.substring(versIdx + 2);
+            if (StringUtils.isNumeric(vers)) {
+                modelPattern = modelPattern.substring(0, versIdx);
+            }
+        }
+
+        return StringUtils.equals(thingServiceName, serviceName) && modelName.toLowerCase().matches(modelPattern);
+    }
+
+    public static boolean isModelMatch(ThingTypeUID uid, String serviceName, String modelName) {
+        Objects.requireNonNull(uid, "uid cannot be null");
+        Validate.notEmpty(modelName, "modelName cannot be empty");
+
+        final String uidServiceName = getServiceName(uid);
+        final String uidModelName = getModelName(uid);
+        return uidModelName == null || StringUtils.isEmpty(uidModelName) ? false : isModelMatch(uidServiceName, uidModelName, serviceName, modelName);
     }
 }

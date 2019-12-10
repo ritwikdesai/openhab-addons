@@ -14,9 +14,11 @@ package org.openhab.binding.sony.internal.ircc;
 
 import java.util.Map;
 
+import org.apache.commons.lang.StringUtils;
 import org.eclipse.jdt.annotation.NonNullByDefault;
 import org.eclipse.jdt.annotation.Nullable;
 import org.openhab.binding.sony.internal.AbstractConfig;
+import org.openhab.binding.sony.internal.SonyUtil;
 
 /**
  * Configuration class for the {@link IrccHandler}.
@@ -31,6 +33,11 @@ public class IrccConfig extends AbstractConfig {
 
     /** The commands map file */
     private @Nullable String commandsMapFile;
+
+    // ---- the following properties are not part of the config.xml (and are properties) ----
+
+    /** The commands map file. */
+    private @Nullable String discoveredCommandsMapFile;
 
     /**
      * Gets the access code
@@ -56,7 +63,7 @@ public class IrccConfig extends AbstractConfig {
      * @return the commands map file
      */
     public @Nullable String getCommandsMapFile() {
-        return commandsMapFile;
+        return commandsMapFile == null || StringUtils.isEmpty(commandsMapFile) ? discoveredCommandsMapFile : commandsMapFile;
     }
 
     /**
@@ -68,9 +75,21 @@ public class IrccConfig extends AbstractConfig {
         this.commandsMapFile = commandsMapFile;
     }
 
+    /**
+     * Sets the discovered commands map file.
+     *
+     * @param discoveredCommandsMapFile the new commands map file
+     */
+    public void setDiscoveredCommandsMapFile(String discoveredCommandsMapFile) {
+        this.discoveredCommandsMapFile = discoveredCommandsMapFile;
+    }
+
     @Override
     public Map<String, Object> asProperties() {
         final Map<String, Object> props = super.asProperties();
+
+        props.put("discoveredCommandsMapFile", SonyUtil.convertNull(discoveredCommandsMapFile, ""));
+        
         conditionallyAddProperty(props, "accessCode", accessCode);
         conditionallyAddProperty(props, "commandsMapFile", commandsMapFile);
         return props;

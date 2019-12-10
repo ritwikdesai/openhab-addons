@@ -18,6 +18,7 @@ import org.apache.commons.lang.StringUtils;
 import org.eclipse.jdt.annotation.NonNullByDefault;
 import org.eclipse.jdt.annotation.Nullable;
 import org.openhab.binding.sony.internal.AbstractConfig;
+import org.openhab.binding.sony.internal.SonyUtil;
 
 /**
  * Configuration class for the {@link SimpleIpHandler}.
@@ -32,6 +33,12 @@ public class SimpleIpConfig extends AbstractConfig {
 
     /** The network interface the sony system listens on (eth0 or wlan0). */
     private @Nullable String netInterface;
+
+    
+    // ---- the following properties are not part of the config.xml (and are properties) ----
+
+    /** The commands map file. */
+    private @Nullable String discoveredCommandsMapFile;
 
     @Override
     public @Nullable String getDeviceIpAddress() {
@@ -69,7 +76,7 @@ public class SimpleIpConfig extends AbstractConfig {
      */
 
     public @Nullable String getCommandsMapFile() {
-        return commandsMapFile;
+        return commandsMapFile == null || StringUtils.isEmpty(commandsMapFile) ? discoveredCommandsMapFile : commandsMapFile;
     }
 
     /**
@@ -81,18 +88,23 @@ public class SimpleIpConfig extends AbstractConfig {
         this.commandsMapFile = commandsMapFile;
     }
 
+    /**
+     * Sets the discovered command map file name.
+     *
+     * @param discoveredCommandsMapFile the command map file name
+     */
+    public void setDiscoveredCommandsMapFile(String discoveredCommandsMapFile) {
+        this.discoveredCommandsMapFile = discoveredCommandsMapFile;
+    }
+
     @Override
     public Map<String, Object> asProperties() {
         final Map<String, Object> props = super.asProperties();
-        final String localCommandsMapFile = commandsMapFile;
-        if (localCommandsMapFile != null) {
-            props.put("commandsMapFile", localCommandsMapFile);
-        }
 
-        final String localNetInterface = netInterface;
-        if (localNetInterface != null) {
-            props.put("netInterface", localNetInterface);
-        }
+        props.put("discoveredCommandsMapFile", SonyUtil.convertNull(discoveredCommandsMapFile, ""));
+        conditionallyAddProperty(props, "commandsMapFile", commandsMapFile);
+        conditionallyAddProperty(props, "netInterface", netInterface);
+        
         return props;
     }
 }

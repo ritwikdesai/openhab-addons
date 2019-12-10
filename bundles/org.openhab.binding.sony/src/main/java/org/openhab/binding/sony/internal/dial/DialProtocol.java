@@ -13,6 +13,7 @@
 package org.openhab.binding.sony.internal.dial;
 
 import java.io.IOException;
+import java.net.URISyntaxException;
 import java.net.URL;
 import java.util.Collections;
 import java.util.HashMap;
@@ -29,9 +30,11 @@ import org.eclipse.smarthome.core.library.types.RawType;
 import org.eclipse.smarthome.core.library.types.StringType;
 import org.eclipse.smarthome.core.thing.ThingStatusDetail;
 import org.eclipse.smarthome.core.types.UnDefType;
-import org.openhab.binding.sony.internal.AccessCheckResult;
+import org.openhab.binding.sony.internal.AccessResult;
+import org.openhab.binding.sony.internal.CheckResult;
 import org.openhab.binding.sony.internal.LoginUnsuccessfulResponse;
 import org.openhab.binding.sony.internal.SonyAuth;
+import org.openhab.binding.sony.internal.SonyAuthChecker;
 import org.openhab.binding.sony.internal.SonyUtil;
 import org.openhab.binding.sony.internal.ThingCallback;
 import org.openhab.binding.sony.internal.dial.models.DialApp;
@@ -86,7 +89,7 @@ class DialProtocol<T extends ThingCallback<String>> implements AutoCloseable {
      * @param callback a non-null {@link ThingCallback} to callback
      * @throws IOException if an ioexception is thrown
      */
-    DialProtocol(DialConfig config, T callback) throws IOException {
+    DialProtocol(DialConfig config, T callback) throws IOException, URISyntaxException {
         Objects.requireNonNull(config, "config cannot be null");
         Objects.requireNonNull(callback, "callback cannot be null");
 
@@ -124,41 +127,58 @@ class DialProtocol<T extends ThingCallback<String>> implements AutoCloseable {
     @Nullable
     LoginUnsuccessfulResponse login() throws IOException {
 
+        final String accessCode = config.getAccessCode();
+
         transport.setOption(TransportOptionAutoAuth.FALSE);
+        final SonyAuthChecker authChecker = new SonyAuthChecker(transport, accessCode);
 
         SonyUtil.sendWakeOnLan(logger, config.getDeviceIpAddress(), config.getDeviceMacAddress());
 
-        boolean needsAuth = false;
-        for (DialDeviceInfo info : dialClient.getDeviceInfos()) {
-            final String appsListUrl = info.getAppsListUrl();
-            if (appsListUrl == null || StringUtils.isEmpty(appsListUrl)) {
-                return new LoginUnsuccessfulResponse(ThingStatusDetail.CONFIGURATION_ERROR,
-                        "No application list URL to check");
+        final CheckResult checkResult = authChecker.checkResult(() -> {
+            for (DialDeviceInfo info : dialClient.getDeviceInfos()) {
+                final String appsListUrl = info.getAppsListUrl();
+                if (appsListUrl == null || StringUtils.isEmpty(appsListUrl)) {
+                    return new AccessResult(Integer.toString(HttpStatus.INTERNAL_SERVER_ERROR_500),
+                            "No application list URL to check");
+                }
+                final HttpResponse resp = getApplicationList(appsListUrl);
+                if (resp.getHttpCode() == HttpStatus.FORBIDDEN_403) {
+                    return AccessResult.NEEDSPAIRING;
+                }
             }
-            final HttpResponse resp = getApplicationList(appsListUrl);
-            if (resp.getHttpCode() == HttpStatus.FORBIDDEN_403) {
-                needsAuth = true;
-                break;
-            }
-        }
+            return AccessResult.OK;
+        });
 
-        if (needsAuth) {
-            final String accessCode = config.getAccessCode();
+        if (CheckResult.OK_HEADER.equals(checkResult)) {
+            if (accessCode == null || StringUtils.isEmpty(accessCode)) {
+                // This shouldn't happen - if our check result is OK_HEADER, then 
+                // we had a valid (non-null, non-empty) accessCode.  Unfortunately
+                // nullable checking thinks this can be null now.
+                logger.debug("This shouldn't happen - access code is blank!: {}", accessCode);
+                return new LoginUnsuccessfulResponse(ThingStatusDetail.CONFIGURATION_ERROR,
+                        "Access code cannot be blank");
+            } else {
+                SonyAuth.setupHeader(accessCode, transport);
+            }
+        } else if (CheckResult.OK_COOKIE.equals(checkResult)) {
+            SonyAuth.setupCookie(transport);
+        } else if (AccessResult.NEEDSPAIRING.equals(checkResult)) {
             if (StringUtils.isEmpty(accessCode)) {
                 return new LoginUnsuccessfulResponse(ThingStatusDetail.CONFIGURATION_ERROR,
                         "Access code cannot be blank");
             } else {
-                final AccessCheckResult result = sonyAuth.requestAccess(transport,
+                final AccessResult result = sonyAuth.requestAccess(transport,
                         StringUtils.equalsIgnoreCase(DialConstants.ACCESSCODE_RQST, accessCode) ? null : accessCode);
-                if (result == AccessCheckResult.OK) {
-                    // GOOD!
+                if (AccessResult.OK.equals(result)) {
+                    SonyAuth.setupCookie(transport);
                 } else {
                     return new LoginUnsuccessfulResponse(ThingStatusDetail.CONFIGURATION_ERROR, result.getMsg());
                 }
             }
+        } else {
+            return new LoginUnsuccessfulResponse(ThingStatusDetail.CONFIGURATION_ERROR, checkResult.getMsg());
         }
 
-        transport.setOption(TransportOptionAutoAuth.TRUE);
         return null;
     }
 

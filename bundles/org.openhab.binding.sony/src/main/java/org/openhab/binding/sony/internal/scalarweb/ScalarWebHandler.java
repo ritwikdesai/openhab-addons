@@ -28,6 +28,7 @@ import org.apache.commons.lang.StringUtils;
 import org.eclipse.jdt.annotation.NonNullByDefault;
 import org.eclipse.jdt.annotation.Nullable;
 import org.eclipse.jetty.websocket.client.WebSocketClient;
+import org.eclipse.smarthome.config.core.Configuration;
 import org.eclipse.smarthome.core.thing.Channel;
 import org.eclipse.smarthome.core.thing.ChannelUID;
 import org.eclipse.smarthome.core.thing.Thing;
@@ -42,14 +43,15 @@ import org.eclipse.smarthome.core.types.Command;
 import org.eclipse.smarthome.core.types.RefreshType;
 import org.eclipse.smarthome.core.types.State;
 import org.openhab.binding.sony.internal.AbstractThingHandler;
-import org.openhab.binding.sony.internal.AccessCheckResult;
+import org.openhab.binding.sony.internal.AccessResult;
 import org.openhab.binding.sony.internal.SonyBindingConstants;
 import org.openhab.binding.sony.internal.SonyUtil;
 import org.openhab.binding.sony.internal.ThingCallback;
 import org.openhab.binding.sony.internal.providers.SonyDefinitionProvider;
-import org.openhab.binding.sony.internal.providers.SonyDeviceCapability;
+import org.openhab.binding.sony.internal.providers.SonyProviderListener;
 import org.openhab.binding.sony.internal.providers.SonyDynamicStateProvider;
-import org.openhab.binding.sony.internal.providers.SonyServiceCapability;
+import org.openhab.binding.sony.internal.providers.models.SonyDeviceCapability;
+import org.openhab.binding.sony.internal.providers.models.SonyServiceCapability;
 import org.openhab.binding.sony.internal.scalarweb.models.ScalarWebService;
 import org.openhab.binding.sony.internal.scalarweb.protocols.ScalarWebLoginProtocol;
 import org.openhab.binding.sony.internal.scalarweb.protocols.ScalarWebProtocol;
@@ -99,6 +101,9 @@ public class ScalarWebHandler extends AbstractThingHandler<ScalarWebConfig> {
     /** The channel mapper to use */
     private final ScalarWebChannelMapper mapper;
 
+    /** The definition listener */
+    private final DefinitionListener definitionListener = new DefinitionListener();
+
     /**
      * Constructs the web handler
      *
@@ -138,9 +143,24 @@ public class ScalarWebHandler extends AbstractThingHandler<ScalarWebConfig> {
             }
 
             @Override
-            public void setProperty(String propertyName, String propertyValue) {
+            public void setProperty(String propertyName, @Nullable String propertyValue) {
+                // change meaning of null propertyvalue
+                // setProperty says remove - here we are ignoring
                 if (propertyValue != null && StringUtils.isNotEmpty(propertyValue)) {
                     getThing().setProperty(propertyName, propertyValue);
+                }
+
+                // Update the discovered model name if found
+                if (StringUtils.equals(propertyName, ScalarWebConstants.PROP_MODEL) 
+                        && propertyValue != null 
+                        && StringUtils.isNotEmpty(propertyValue)) {
+                    final ScalarWebConfig swConfig = getSonyConfig();
+                    swConfig.setDiscoveredModelName(propertyValue);
+
+                    final Configuration config = getConfig();
+                    config.setProperties(swConfig.asProperties());
+                    
+                    updateConfiguration(config);
                 }
             }
         };
@@ -181,7 +201,8 @@ public class ScalarWebHandler extends AbstractThingHandler<ScalarWebConfig> {
 
     @Override
     protected void connect() {
-        final ScalarWebConfig config = getThing().getConfiguration().as(ScalarWebConfig.class);
+
+        final ScalarWebConfig config = getSonyConfig();
 
         final String scalarWebUrl = config.getDeviceAddress();
         if (scalarWebUrl == null || StringUtils.isEmpty(scalarWebUrl)) {
@@ -200,16 +221,13 @@ public class ScalarWebHandler extends AbstractThingHandler<ScalarWebConfig> {
             final ScalarWebClient client = new ScalarWebClient(scalarWebUrl, context);
             scalarClient.set(client);
 
-            // Write capabilities before attempting to go online
-            writeDeviceCapabilities(client);
-
             final ScalarWebLoginProtocol<ThingCallback<String>> loginHandler = new ScalarWebLoginProtocol<>(client,
                     config, callback, transformationService);
 
-            final AccessCheckResult result = loginHandler.login();
+            final AccessResult result = loginHandler.login();
             SonyUtil.checkInterrupt();
 
-            if (result == AccessCheckResult.OK) {
+            if (result == AccessResult.OK) {
                 final ScalarWebProtocolFactory<ThingCallback<String>> factory = new ScalarWebProtocolFactory<>(context,
                         client, callback);
 
@@ -217,7 +235,6 @@ public class ScalarWebHandler extends AbstractThingHandler<ScalarWebConfig> {
 
                 final ThingBuilder thingBuilder = editThing();
                 thingBuilder.withChannels(getChannels(factory));
-                thingBuilder.withLabel(thing.getLabel());// bug to save it
                 updateThing(thingBuilder.build());
 
                 SonyUtil.checkInterrupt();
@@ -225,19 +242,28 @@ public class ScalarWebHandler extends AbstractThingHandler<ScalarWebConfig> {
                 SonyUtil.close(protocolFactory.getAndSet(factory));
                 updateStatus(ThingStatus.ONLINE, ThingStatusDetail.NONE);
 
-                // Refresh the state right away
-                refreshState();
+                this.scheduler.submit(() -> {
+                    // Refresh the state right away
+                    refreshState();
 
-                // after state is refreshed - write the definition
-                // (which could include dynamic state from refresh)
-                writeThingDefinition();
+                    // after state is refreshed - write the definition
+                    // (which could include dynamic state from refresh)
+                    writeThingDefinition();
+                    writeDeviceCapabilities(client);
+
+                    final String modelName = getModelName();
+                    if (modelName != null && StringUtils.isNotEmpty(modelName)) {
+                        sonyDefinitionProvider.addListener(modelName, getThing().getThingTypeUID(), definitionListener);
+                    }
+
+                });
             } else {
                 // If it's a pending access (or code not accepted), update with a configuration error
                 // this prevents a reconnect (which will cancel any current registration code)
                 // Note: there are other access code type errors that probably should be trapped here
                 // as well - but those are the major two (probably represent 99% of the cases)
                 // and we handle them separately
-                if (result == AccessCheckResult.PENDING || result == AccessCheckResult.NOTACCEPTED) {
+                if (result == AccessResult.PENDING || result == AccessResult.NOTACCEPTED) {
                     updateStatus(ThingStatus.OFFLINE, ThingStatusDetail.CONFIGURATION_ERROR, result.getMsg());
                 } else {
                     updateStatus(ThingStatus.OFFLINE, ThingStatusDetail.COMMUNICATION_ERROR, result.getMsg());
@@ -274,8 +300,7 @@ public class ScalarWebHandler extends AbstractThingHandler<ScalarWebConfig> {
 
         // Get all channel descriptors if we are generic
         // Get ONLY the app control descriptors (which are dynamic) if not
-        for (ScalarWebChannelDescriptor descriptor : factory
-                .getChannelDescriptors(genericThing ? null : ScalarWebService.APPCONTROL)) {
+        for (ScalarWebChannelDescriptor descriptor : factory.getChannelDescriptors(!genericThing)) {
             final Channel channel = descriptor.createChannel(thingUid, mapper).build();
             final String channelId = channel.getUID().getId();
             if (channels.containsKey(channelId)) {
@@ -294,12 +319,15 @@ public class ScalarWebHandler extends AbstractThingHandler<ScalarWebConfig> {
      * @return a possibly null model name
      */
     private @Nullable String getModelName() {
-        final String modelName = thing.getProperties().get(ScalarWebConstants.PROP_MODEL);
-        if (modelName == null || StringUtils.isEmpty(modelName)
-                || StringUtils.equalsIgnoreCase(modelName, ScalarWebLoginProtocol.NOTAVAILABLE)) {
-            return thing.getLabel();
+        final String modelName = getSonyConfig().getModelName();
+        if (modelName != null && StringUtils.isNotEmpty(modelName) && SonyUtil.isValidModelName(modelName)) {
+            return modelName;
         }
-        return modelName;
+
+        final String thingLabel = thing.getLabel();
+        return thingLabel != null && StringUtils.isNotEmpty(thingLabel) && SonyUtil.isValidModelName(thingLabel)
+                ? thingLabel
+                : null;
     }
 
     /**
@@ -378,7 +406,20 @@ public class ScalarWebHandler extends AbstractThingHandler<ScalarWebConfig> {
     @Override
     public void dispose() {
         super.dispose();
+        sonyDefinitionProvider.removeListener(definitionListener);
         SonyUtil.close(protocolFactory.getAndSet(null));
         SonyUtil.close(scalarClient.getAndSet(null));
+    }
+
+    private class DefinitionListener implements SonyProviderListener {
+        @Override
+        public void thingTypeFound(ThingTypeUID uid) {
+            final String modelName = getModelName();
+            if (modelName != null 
+                    && StringUtils.isNotEmpty(modelName)
+                    && SonyUtil.isModelMatch(uid, SonyBindingConstants.SCALAR_THING_TYPE_PREFIX, modelName)) {
+                changeThingType(uid, getConfig());
+            }
+        }
     }
 }

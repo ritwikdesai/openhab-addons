@@ -46,6 +46,11 @@ public class AbstractConfig {
     /** The check status polling in seconds (null for default, < 1 to disable) */
     private @Nullable Integer checkStatusPolling;
 
+    // ---- the following properties are not part of the config.xml (and are properties) ----
+
+    /** The mac address that was discovered */
+    private @Nullable String discoveredMacAddress;
+
     /**
      * Constructs (and returns) a URL represented by the {@link #deviceAddress}
      *
@@ -109,7 +114,7 @@ public class AbstractConfig {
      * @return the device mac address
      */
     public @Nullable String getDeviceMacAddress() {
-        return deviceMacAddress;
+        return deviceMacAddress == null || StringUtils.isEmpty(deviceMacAddress) ? discoveredMacAddress : deviceMacAddress;
     }
 
     /**
@@ -122,12 +127,21 @@ public class AbstractConfig {
     }
 
     /**
+     * Sets the discovered mac address.
+     *
+     * @param discoveredMacAddress the device mac address
+     */
+    public void setDiscoveredMacAddress(@Nullable String discoveredMacAddress) {
+        this.discoveredMacAddress = discoveredMacAddress;
+    }
+
+    /**
      * Checks if is wol.
      *
      * @return true, if is wol
      */
     public boolean isWOL() {
-        return StringUtils.isNotBlank(deviceMacAddress);
+        return StringUtils.isNotBlank(getDeviceMacAddress());
     }
 
     /**
@@ -193,7 +207,8 @@ public class AbstractConfig {
         final Map<String, Object> props = new HashMap<>();
 
         props.put("deviceAddress", SonyUtil.convertNull(deviceAddress, ""));
-        props.put("deviceMacAddress", SonyUtil.convertNull(deviceMacAddress, ""));
+        props.put("discoveredMacAddress", SonyUtil.convertNull(discoveredMacAddress, ""));
+        conditionallyAddProperty(props, "deviceMacAddress", deviceMacAddress);
         conditionallyAddProperty(props, "refresh", refresh);
         conditionallyAddProperty(props, "retryPolling", retryPolling);
         conditionallyAddProperty(props, "checkStatusPolling", checkStatusPolling);

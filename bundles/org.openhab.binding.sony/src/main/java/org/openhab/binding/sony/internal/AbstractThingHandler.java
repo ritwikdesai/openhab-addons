@@ -81,6 +81,14 @@ public abstract class AbstractThingHandler<C extends AbstractConfig> extends Bas
      */
     protected abstract void refreshState();
 
+    /**
+     * Returns the configuration cast to the specific type
+     * @return a non-null configuration
+     */
+    protected C getSonyConfig() {
+        return getConfigAs(configType);
+    }
+
     @Override
     public void initialize() {
         SonyUtil.cancel(retryConnection.getAndSet(this.scheduler.submit(() -> {
@@ -109,7 +117,7 @@ public abstract class AbstractThingHandler<C extends AbstractConfig> extends Bas
      * seconds) is greater than 0. This process will continue until cancelled.
      */
     private void schedulePolling() {
-        final AbstractConfig config = getConfigAs(configType);
+        final C config = getSonyConfig();
         final Integer refresh = config.getRefresh();
 
         if (refresh != null && refresh > 0) {
@@ -126,7 +134,9 @@ public abstract class AbstractThingHandler<C extends AbstractConfig> extends Bas
                 // catch the various runtime exceptions that may occur here (the biggest being ProcessingException)
                 // and handle it.
                 try {
-                    refreshState();
+                    if (thing.getStatus() == ThingStatus.ONLINE) {
+                        refreshState();
+                    }
                 } catch (Exception ex) {
                     if (StringUtils.contains(ex.getMessage(), "Connection refused")) {
                         logger.debug("Connection refused - device is probably turned off");
@@ -151,7 +161,7 @@ public abstract class AbstractThingHandler<C extends AbstractConfig> extends Bas
      * it takes to connect, you can get in an infinite loop of the connect getting cancelled for the next retry.
      */
     private void scheduleReconnect() {
-        final AbstractConfig config = getConfigAs(configType);
+        final C config = getSonyConfig();
         final Integer retryPolling = config.getRetryPolling();
 
         if (retryPolling != null && retryPolling > 0) {
@@ -170,7 +180,7 @@ public abstract class AbstractThingHandler<C extends AbstractConfig> extends Bas
      * {@link #scheduleCheckStatus(Integer, String, Integer)}
      */
     private void scheduleCheckStatus() {
-        final AbstractConfig config = getThing().getConfiguration().as(configType);
+        final C config = getSonyConfig();
         scheduleCheckStatus(config.getCheckStatusPolling(), config.getDeviceIpAddress(), config.getDevicePort());
     }
 

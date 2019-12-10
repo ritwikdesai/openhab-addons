@@ -13,12 +13,18 @@
 package org.openhab.binding.sony.internal.scalarweb.models;
 
 import java.util.Collections;
+import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.stream.Collectors;
 
 import org.apache.commons.lang.StringUtils;
 import org.apache.commons.lang.Validate;
 import org.eclipse.jdt.annotation.NonNullByDefault;
+import org.eclipse.jdt.annotation.Nullable;
+import org.openhab.binding.sony.internal.SonyMatcher;
+import org.openhab.binding.sony.internal.SonyUtil;
 
 /**
  * This class represents a web scalar method definition that can be called
@@ -26,7 +32,7 @@ import org.eclipse.jdt.annotation.NonNullByDefault;
  * @author Tim Roberts - Initial contribution
  */
 @NonNullByDefault
-public class ScalarWebMethod {
+public class ScalarWebMethod implements SonyMatcher {
 
     // The following are various method names that can be used
 
@@ -150,6 +156,13 @@ public class ScalarWebMethod {
     public static final String V1_4 = "1.4";
     public static final String V1_5 = "1.5";
 
+    public static final int UNKNOWN_VARIATION = -1;
+    
+    // The comparator to compare scalar web methods
+    public static final Comparator<SonyMatcher> COMPARATOR = Comparator
+            .comparing((SonyMatcher e) -> ((ScalarWebMethod) e).getMethodName())
+            .thenComparing(e -> ((ScalarWebMethod) e).getVersion());
+
     /** The method name */
     private final String methodName;
 
@@ -162,7 +175,14 @@ public class ScalarWebMethod {
     /** The method version */
     private final String version;
 
-    /**
+    /** The method version */
+    private final int variation;
+
+    public ScalarWebMethod(String methodName, List<String> parms, List<String> retVals, String version) {
+        this(methodName, parms, retVals, version, 0);
+    }
+
+        /**
      * Instantiates a new scalar web method base on the parameters
      *
      * @param methodName the non-null, non-empty method name
@@ -170,16 +190,19 @@ public class ScalarWebMethod {
      * @param retVals    the non-null, possibly empty return values
      * @param version    the non-null, non-empty method version
      */
-    public ScalarWebMethod(String methodName, List<String> parms, List<String> retVals, String version) {
+    public ScalarWebMethod(String methodName, List<String> parms, List<String> retVals, String version, int variation) {
         Validate.notEmpty(methodName, "methodName cannot be empty");
         Objects.requireNonNull(parms, "parms cannot be null");
         Objects.requireNonNull(retVals, "retVals cannot be null");
         Validate.notEmpty(version, "getVolumeInformationersion cannot be empty");
 
         this.methodName = methodName;
-        this.parms = Collections.unmodifiableList(parms);
-        this.retVals = Collections.unmodifiableList(retVals);
+        this.parms = Collections
+                .unmodifiableList(parms.stream().map(s -> StringUtils.trim(s)).collect(Collectors.toList()));
+        this.retVals = Collections
+                .unmodifiableList(retVals.stream().map(s -> StringUtils.trim(s)).collect(Collectors.toList()));
         this.version = version;
+        this.variation = variation;
     }
 
     /**
@@ -218,6 +241,15 @@ public class ScalarWebMethod {
         return version;
     }
 
+    /**
+     * Gets the method version variation
+     *
+     * @return the method version variation
+     */
+    public int getVariation() {
+        return variation;
+    }
+
     @Override
     public String toString() {
         final StringBuilder sb = new StringBuilder(100);
@@ -225,11 +257,39 @@ public class ScalarWebMethod {
         sb.append(getMethodName());
         sb.append("[");
         sb.append(getVersion());
+        if (variation > 0) {
+            sb.append("-");
+            sb.append(getVariation());
+        }
         sb.append("](");
         sb.append(StringUtils.join(parms, ','));
         sb.append("): ");
         sb.append(StringUtils.join(retVals, ','));
 
         return sb.toString();
+    }
+
+    @Override
+    public boolean equals(@Nullable Object obj) {
+        // cast is fine since matches wouldn't be true without it
+        return matches(obj) && variation == ((ScalarWebMethod) obj).variation;
+
+    }
+
+    @Override
+    public boolean matches(@Nullable Object obj) {
+        if (this == obj) {
+            return true;
+        }
+        if (obj == null || !(obj instanceof ScalarWebMethod)) {
+            return false;
+        }
+
+        final ScalarWebMethod other = (ScalarWebMethod) obj;
+
+        return StringUtils.equalsIgnoreCase(methodName, other.methodName)
+                && StringUtils.equalsIgnoreCase(version, other.version)
+                && SonyUtil.equalsIgnoreCase(new HashSet<>(parms), new HashSet<>(other.parms))
+                && SonyUtil.equalsIgnoreCase(new HashSet<>(retVals), new HashSet<>(other.retVals));
     }
 }

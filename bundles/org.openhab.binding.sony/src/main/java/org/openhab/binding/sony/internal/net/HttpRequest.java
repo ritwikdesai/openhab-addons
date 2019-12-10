@@ -31,6 +31,8 @@ import javax.ws.rs.core.Response;
 import org.apache.commons.lang.Validate;
 import org.eclipse.jdt.annotation.NonNullByDefault;
 import org.eclipse.jetty.http.HttpStatus;
+import org.glassfish.jersey.client.ClientConfig;
+import org.glassfish.jersey.client.ClientProperties;
 import org.glassfish.jersey.filter.LoggingFilter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -56,7 +58,13 @@ public class HttpRequest implements AutoCloseable {
      * Instantiates a new http request
      */
     public HttpRequest() {
-        client = ClientBuilder.newClient();
+        // NOTE: assumes jersey client (no JAX compliant way of doing this)
+        // NOTE2: jax 2.1 has a way but we don't use that
+        final ClientConfig configuration = new ClientConfig();
+        configuration.property(ClientProperties.CONNECT_TIMEOUT, 2000);
+        configuration.property(ClientProperties.READ_TIMEOUT, 2000);
+
+        client = ClientBuilder.newClient(configuration);
 
         if (logger.isDebugEnabled()) {
             client.register(new LoggingFilter(new Slf4LoggingAdapter(logger), true));

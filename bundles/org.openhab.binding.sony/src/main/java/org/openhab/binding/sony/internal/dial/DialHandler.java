@@ -14,6 +14,7 @@ package org.openhab.binding.sony.internal.dial;
 
 import java.io.IOException;
 import java.net.MalformedURLException;
+import java.net.URISyntaxException;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -145,7 +146,7 @@ public class DialHandler extends AbstractThingHandler<DialConfig> {
 
     @Override
     protected void connect() {
-        final DialConfig config = getThing().getConfiguration().as(DialConfig.class);
+        final DialConfig config = getSonyConfig();
 
         try {
             // Validate the device URL
@@ -172,7 +173,7 @@ public class DialHandler extends AbstractThingHandler<DialConfig> {
                         }
 
                         @Override
-                        public void setProperty(String propertyName, String propertyValue) {
+                        public void setProperty(String propertyName, @Nullable String propertyValue) {
                             getThing().setProperty(propertyName, propertyValue);
                         }
                     });
@@ -194,7 +195,7 @@ public class DialHandler extends AbstractThingHandler<DialConfig> {
             } else {
                 updateStatus(ThingStatus.OFFLINE, response.getThingStatusDetail(), response.getMessage());
             }
-        } catch (IOException e) {
+        } catch (IOException | URISyntaxException e) {
             updateStatus(ThingStatus.OFFLINE, ThingStatusDetail.COMMUNICATION_ERROR,
                     "Error connecting to DIAL device (may need to turn it on manually): " + e.getMessage());
         } catch (InterruptedException e) {

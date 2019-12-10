@@ -13,7 +13,8 @@
 package org.openhab.binding.sony.internal.transports;
 
 import java.io.Closeable;
-import java.net.URL;
+import java.net.URI;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -48,7 +49,10 @@ public interface SonyTransport extends Closeable {
          TransportOption... options);
 
    public void setOption(TransportOption option);
+
    public void removeOption(TransportOption option);
+
+   public List<TransportOption> getOptions();
 
    public void addListener(SonyTransportListener listener);
 
@@ -56,7 +60,7 @@ public interface SonyTransport extends Closeable {
 
    public String getProtocolType();
 
-   public URL getBaseUrl();
+   public URI getBaseUri();
    
    @Override
    public void close();

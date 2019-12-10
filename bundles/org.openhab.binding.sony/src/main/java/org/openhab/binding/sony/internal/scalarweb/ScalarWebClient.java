@@ -13,6 +13,7 @@
 package org.openhab.binding.sony.internal.scalarweb;
 
 import java.io.IOException;
+import java.net.URISyntaxException;
 import java.net.URL;
 import java.util.Objects;
 
@@ -61,7 +62,7 @@ public class ScalarWebClient implements AutoCloseable {
      * @throws SAXException                 the SAX exception
      */
     public ScalarWebClient(String scalarWebUrl, ScalarWebContext context)
-            throws IOException, ParserConfigurationException, SAXException {
+            throws IOException, ParserConfigurationException, SAXException, URISyntaxException {
         Validate.notEmpty(scalarWebUrl, "scalarWebUrl cannot be empty");
         Objects.requireNonNull(context, "context cannot be null");
 

@@ -16,9 +16,11 @@ import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.Map;
 
+import org.apache.commons.lang.StringUtils;
 import org.eclipse.jdt.annotation.NonNullByDefault;
 import org.eclipse.jdt.annotation.Nullable;
 import org.openhab.binding.sony.internal.AbstractConfig;
+import org.openhab.binding.sony.internal.SonyUtil;
 
 /**
  * Configuration class for the scalar web service
@@ -36,6 +38,17 @@ public class ScalarWebConfig extends AbstractConfig {
 
     /** The URL to the IRCC service */
     private @Nullable String irccUrl;
+
+    /** The model name*/
+    private @Nullable String modelName;
+
+    // ---- the following properties are not part of the config.xml (and are properties) ----
+
+    /** The commands map file. */
+    private @Nullable String discoveredCommandsMapFile;
+
+    /** The commands map file. */
+    private @Nullable String discoveredModelName;
 
     /**
      * Returns the IP address or host name.
@@ -74,7 +87,9 @@ public class ScalarWebConfig extends AbstractConfig {
      * @return the commands map file
      */
     public @Nullable String getCommandsMapFile() {
-        return commandsMapFile;
+        final String localCommandsMapFile = commandsMapFile;
+        return localCommandsMapFile == null || StringUtils.isEmpty(localCommandsMapFile) ? discoveredCommandsMapFile
+                : localCommandsMapFile;
     }
 
     /**
@@ -84,6 +99,16 @@ public class ScalarWebConfig extends AbstractConfig {
      */
     public void setCommandsMapFile(String commandsMapFile) {
         this.commandsMapFile = commandsMapFile;
+    }
+
+
+    /**
+     * Sets the discovered commands map file.
+     *
+     * @param discoveredCommandsMapFile the new commands map file
+     */
+    public void setDiscoveredCommandsMapFile(String discoveredCommandsMapFile) {
+        this.discoveredCommandsMapFile = discoveredCommandsMapFile;
     }
 
     /**
@@ -104,13 +129,54 @@ public class ScalarWebConfig extends AbstractConfig {
         this.irccUrl = irccUrl;
     }
 
+    /**
+     * Get the model name
+     *
+     * @return the model name
+     */
+    public @Nullable String getModelName() {
+        final String localModelName = modelName;
+        return localModelName == null || StringUtils.isEmpty(localModelName) ? discoveredModelName : localModelName;
+    }
+
+    /**
+     * Sets the model name
+     *
+     * @param modelName the model name
+     */
+    public void setModelName(String modelName) {
+        this.modelName = modelName;
+    }
+
+    /**
+     * Get the discovered model name
+     *
+     * @return the discovered model name
+     */
+    public @Nullable String getDiscoveredModelName() {
+        return discoveredModelName;
+    }
+
+    /**
+     * Sets the discovered model name
+     *
+     * @param irccUrl the discovered model name
+     */
+    public void setDiscoveredModelName(@Nullable String discoveredModelName) {
+        this.discoveredModelName = discoveredModelName;
+    }
+
     @Override
     public Map<String, Object> asProperties() {
         final Map<String, Object> props = super.asProperties();
         
+        props.put("discoveredCommandsMapFile", SonyUtil.convertNull(discoveredCommandsMapFile, ""));
+        props.put("discoveredModelName", SonyUtil.convertNull(discoveredModelName, ""));
+
         conditionallyAddProperty(props, "accessCode", accessCode);
         conditionallyAddProperty(props, "commandsMapFile", commandsMapFile);
         conditionallyAddProperty(props, "irccUrl", irccUrl);
+        conditionallyAddProperty(props, "modelName", modelName);
         
         return props;
     }

@@ -12,8 +12,9 @@
  */
 package org.openhab.binding.sony.internal.transports;
 
-import java.net.URL;
+import java.net.URI;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -33,19 +34,19 @@ import org.openhab.binding.sony.internal.scalarweb.models.ScalarWebEvent;
 @NonNullByDefault
 public abstract class AbstractSonyTransport implements SonyTransport {
 
-    private final URL baseUrl;
+    private final URI baseUri;
 
     private final List<SonyTransportListener> listeners = new CopyOnWriteArrayList<>();
 
     private final List<TransportOption> options = new CopyOnWriteArrayList<>();
 
-    protected AbstractSonyTransport(URL baseUrl) {
-        this.baseUrl = baseUrl;
+    protected AbstractSonyTransport(URI baseUrl) {
+        this.baseUri = baseUrl;
     }
 
     @Override
-    public URL getBaseUrl() {
-        return baseUrl;
+    public URI getBaseUri() {
+        return baseUri;
     }
 
     @Override
@@ -91,8 +92,9 @@ public abstract class AbstractSonyTransport implements SonyTransport {
         options.remove(option);
     }
 
-    protected List<TransportOption> getOptions() {
-        return options;
+    @Override
+    public List<TransportOption> getOptions() {
+        return Collections.unmodifiableList(options);
     }
 
     @SuppressWarnings("unchecked")

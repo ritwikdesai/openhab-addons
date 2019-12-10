@@ -12,6 +12,7 @@
  */
 package org.openhab.binding.sony.internal.transports;
 
+import org.eclipse.jetty.http.HttpHeader;
 import org.openhab.binding.sony.internal.net.Header;
 
 /**
@@ -23,6 +24,10 @@ public class TransportOptionHeader implements TransportOption {
 
     public TransportOptionHeader(Header header) {
         this.header = header;
+    }
+
+    public TransportOptionHeader(HttpHeader hdr, String value) {
+        this.header = new Header(hdr.asString(), value);
     }
 
     public TransportOptionHeader(String key, String value) {

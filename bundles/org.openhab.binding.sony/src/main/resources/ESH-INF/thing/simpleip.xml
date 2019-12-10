@@ -26,6 +26,7 @@
 			<channel id="togglepipposition" typeId="simpleiptogglepipposition" />
 		</channels>
 
+		<representation-property>SimpleUDN</representation-property>
 		<config-description-ref uri="thing-type:sony:simpleipconfig" />
 	</thing-type>
 

@@ -15,13 +15,12 @@
  */
 package org.openhab.binding.sony.internal.scalarweb.protocols;
 
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.stream.Collectors;
 
 import org.apache.commons.lang.StringUtils;
 import org.eclipse.jdt.annotation.NonNullByDefault;
@@ -123,7 +122,7 @@ public class ScalarWebProtocolFactory<T extends ThingCallback<String>> implement
      * @return the non-null, possibly empty channel descriptors
      */
     public Collection<ScalarWebChannelDescriptor> getChannelDescriptors() {
-        return getChannelDescriptors(null);
+        return getChannelDescriptors(false);
     }
 
     /**
@@ -132,25 +131,9 @@ public class ScalarWebProtocolFactory<T extends ThingCallback<String>> implement
      * @param service a possibly null, possibly empty service name (null/empty service means all services)
      * @return the non-null, possibly empty channel descriptors
      */
-    public Collection<ScalarWebChannelDescriptor> getChannelDescriptors(@Nullable String service) {
-        final List<ScalarWebChannelDescriptor> descriptors = new ArrayList<ScalarWebChannelDescriptor>();
-
-        if (service == null || StringUtils.isEmpty(service)) {
-            for (ScalarWebProtocol<T> protocol : protocols.values()) {
-                logger.debug("Getting channel descriptors for {}", protocol.getClass().getName());
-                descriptors.addAll(protocol.getChannelDescriptors());
-            }
-        } else {
-            final ScalarWebProtocol<T> protocol = protocols.get(service);
-            if (protocol == null) {
-                logger.debug("Unknown service/protocol: {}", service);
-            } else {
-                descriptors.addAll(protocol.getChannelDescriptors());
-            }
-
-        }
-
-        return descriptors;
+    public Collection<ScalarWebChannelDescriptor> getChannelDescriptors(boolean dynamicOnly) {
+        return protocols.values().stream().filter(p -> !dynamicOnly || p.isDynamic())
+                .flatMap(p -> p.getChannelDescriptors().stream()).collect(Collectors.toList());
     }
 
     /**
@@ -160,18 +143,13 @@ public class ScalarWebProtocolFactory<T extends ThingCallback<String>> implement
      */
     public void refreshAllState(ScheduledExecutorService scheduler) {
         Objects.requireNonNull(scheduler, "scheduler cannot be null");
-        for (final ScalarWebProtocol<T> protocol : protocols.values()) {
-            scheduler.execute(() -> {
-                protocol.refreshState();
-            });
-        }
-
+        protocols.values().stream().forEach(p -> scheduler.execute(() -> {
+            p.refreshState();
+        }));
     }
 
     @Override
     public void close() {
-        for (ScalarWebProtocol<T> protocol : protocols.values()) {
-            protocol.close();
-        }
+        protocols.values().stream().forEach(p -> p.close());
     }
 }

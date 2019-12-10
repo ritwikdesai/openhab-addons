@@ -153,7 +153,7 @@ public class SonyServlet extends HttpServlet {
         }
 
         final String parms = cmdRqst.getParms();
-        // parms can be empty
+        // cannot be null but can be empty
         if (parms == null) {
             SonyUtil.write(resp, gson.toJson(new CommandResponse(false, "parms is required")));
             return;

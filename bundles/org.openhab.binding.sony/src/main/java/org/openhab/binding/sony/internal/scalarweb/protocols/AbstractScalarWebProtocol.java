@@ -880,6 +880,11 @@ public abstract class AbstractScalarWebProtocol<T extends ThingCallback<String>>
     }
 
     @Override
+    public boolean isDynamic() {
+        return false;
+    }
+
+    @Override
     public void close() {
         service.getTransport().close();
     }

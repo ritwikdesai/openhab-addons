@@ -59,6 +59,8 @@ public interface ScalarWebProtocol<T extends ThingCallback<String>> {
 
     public ScalarWebService getService();
 
+    public boolean isDynamic();
+    
     /**
      * Defines a close method to release resources. We do NOT implement AutoCloseable since that forces an exception
      * onto this method (which we don't need)

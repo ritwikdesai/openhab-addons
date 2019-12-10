@@ -17,13 +17,13 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 
-import org.eclipse.jdt.annotation.NonNullByDefault;
-import org.openhab.binding.sony.internal.scalarweb.models.ScalarWebMethod;
-import org.openhab.binding.sony.internal.scalarweb.models.ScalarWebResult;
-
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonParseException;
+
+import org.eclipse.jdt.annotation.NonNullByDefault;
+import org.openhab.binding.sony.internal.scalarweb.models.ScalarWebMethod;
+import org.openhab.binding.sony.internal.scalarweb.models.ScalarWebResult;
 
 /**
  * This class represents the request to get the method types and is used for deserialization only
@@ -57,11 +57,15 @@ public class MethodTypes {
                 if (elmArray.size() == 4) {
                     final String methodName = elmArray.get(0).getAsString();
 
+                    // NOTE: some devices include whitespace in the response like:
+                    // "{\"stuff\": \"blah\"}" vs "{\"stuff\":\"blah\"}"
+                    // we remove the whitespace to make the parms/retvals consistent
+                    // over all devices
                     final List<String> parms = new ArrayList<String>();
                     final JsonElement parmElm = elmArray.get(1);
                     if (parmElm.isJsonArray()) {
                         for (JsonElement parm : parmElm.getAsJsonArray()) {
-                            parms.add(parm.getAsString());
+                            parms.add(parm.getAsString().replaceAll("\\s", ""));
                         }
                     } else {
                         throw new JsonParseException("Method Parameters wasn't an array: " + elmArray);
@@ -71,7 +75,7 @@ public class MethodTypes {
                     final JsonElement valsElm = elmArray.get(2);
                     if (valsElm.isJsonArray()) {
                         for (JsonElement retVal : valsElm.getAsJsonArray()) {
-                            retVals.add(retVal.getAsString());
+                            retVals.add(retVal.getAsString().replaceAll("\\s", ""));
                         }
                     } else {
                         throw new JsonParseException("Return Values wasn't an array: " + elmArray);

@@ -36,6 +36,7 @@ import org.openhab.binding.sony.internal.scalarweb.models.api.ActRegisterId;
 import org.openhab.binding.sony.internal.scalarweb.models.api.ActRegisterOptions;
 import org.openhab.binding.sony.internal.transports.SonyTransport;
 import org.openhab.binding.sony.internal.transports.TransportOption;
+import org.openhab.binding.sony.internal.transports.TransportOptionAutoAuth;
 import org.openhab.binding.sony.internal.transports.TransportOptionHeader;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -72,8 +73,7 @@ public class SonyAuth {
         String actUrl = null, actVersion = null;
 
         if (accessControlService != null) {
-            actUrl = accessControlService == null ? null
-                    : accessControlService.getTransport().getBaseUrl().toExternalForm();
+            actUrl = accessControlService == null ? null : accessControlService.getTransport().getBaseUri().toString();
             actVersion = accessControlService == null ? null
                     : accessControlService.getVersion(ScalarWebMethod.ACTREGISTER);
         }
@@ -115,7 +115,7 @@ public class SonyAuth {
      * @param accessCode the access code (null for initial setup)
      * @return the http response
      */
-    public AccessCheckResult requestAccess(SonyTransport transport, @Nullable String accessCode) {
+    public AccessResult requestAccess(SonyTransport transport, @Nullable String accessCode) {
         Objects.requireNonNull(transport, "transport cannot be null");
 
         logger.debug("Requesting access: " + accessCode);
@@ -131,7 +131,7 @@ public class SonyAuth {
         final String registrationUrl = getRegistrationUrl();
         if (httpResponse.getHttpCode() == HttpStatus.UNAUTHORIZED_401) {
             if (registrationUrl == null || StringUtils.isEmpty(registrationUrl)) {
-                return accessCode == null ? AccessCheckResult.PENDING : AccessCheckResult.NOTACCEPTED;
+                return accessCode == null ? AccessResult.PENDING : AccessResult.NOTACCEPTED;
             }
         }
 
@@ -143,29 +143,29 @@ public class SonyAuth {
             if (registrationUrl != null && StringUtils.isNotEmpty(registrationUrl)) {
                 final HttpResponse irccResponse = irccRegister(transport, accessCode);
                 if (irccResponse.getHttpCode() == HttpStatus.OK_200) {
-                    return AccessCheckResult.OK;
+                    return AccessResult.OK;
                 } else if (irccResponse.getHttpCode() == HttpStatus.UNAUTHORIZED_401) {
-                    return AccessCheckResult.PENDING;
+                    return AccessResult.PENDING;
                 } else {
-                    return new AccessCheckResult(irccResponse);
+                    return new AccessResult(irccResponse);
                 }
             }
         }
 
         if (result.getDeviceErrorCode() == ScalarWebError.DISPLAYISOFF) {
-            return AccessCheckResult.DISPLAYOFF;
+            return AccessResult.DISPLAYOFF;
         }
 
         if (httpResponse.getHttpCode() == HttpStatus.SERVICE_UNAVAILABLE_503) {
-            return AccessCheckResult.HOMEMENU;
+            return AccessResult.HOMEMENU;
         }
 
         if (httpResponse.getHttpCode() == HttpStatus.OK_200
                 || result.getDeviceErrorCode() == ScalarWebError.ILLEGALARGUMENT) {
-            return AccessCheckResult.OK;
+            return AccessResult.OK;
         }
 
-        return new AccessCheckResult(httpResponse);
+        return new AccessResult(httpResponse);
     }
 
     /**
@@ -173,7 +173,7 @@ public class SonyAuth {
      *
      * @return the non-null {@link HttpResponse}
      */
-    public AccessCheckResult registerRenewal(SonyTransport transport) {
+    public AccessResult registerRenewal(SonyTransport transport) {
         Objects.requireNonNull(transport, "transport cannot be null");
 
         logger.debug("Registering Renewal");
@@ -184,7 +184,7 @@ public class SonyAuth {
 
         // if good response, return it
         if (response.getHttpResponse().getHttpCode() == HttpStatus.OK_200) {
-            return AccessCheckResult.OK;
+            return AccessResult.OK;
         }
 
         // If we got a 401 (unauthorized) and there is no ircc registration url
@@ -192,14 +192,14 @@ public class SonyAuth {
         final String registrationUrl = getRegistrationUrl();
         if (response.getHttpResponse().getHttpCode() == HttpStatus.UNAUTHORIZED_401
                 && (registrationUrl == null || StringUtils.isEmpty(registrationUrl))) {
-            return AccessCheckResult.NEEDSPAIRING;
+            return AccessResult.NEEDSPAIRING;
         }
 
         final HttpResponse irccResponse = irccRenewal(transport);
         if (irccResponse.getHttpCode() == HttpStatus.OK_200) {
-            return AccessCheckResult.OK;
+            return AccessResult.OK;
         } else {
-            return new AccessCheckResult(irccResponse);
+            return new AccessResult(irccResponse);
         }
     }
 
@@ -283,15 +283,27 @@ public class SonyAuth {
         if (actUrl == null) {
             return ScalarWebResult.createNotImplemented(ScalarWebMethod.ACTREGISTER);
         }
-        
-        final HttpResponse r = transport.executePostJson(actUrl, actReg,
-                accessCode == null ? new TransportOption[0]
-                        : new TransportOption[] { new TransportOptionHeader(NetUtil.createAuthHeader(accessCode)) });
+
+        final HttpResponse r = transport.executePostJson(actUrl, actReg, accessCode == null ? new TransportOption[0]
+                : new TransportOption[] { new TransportOptionHeader(NetUtil.createAuthHeader(accessCode)) });
 
         if (r.getHttpCode() == HttpStatus.OK_200) {
             return gson.fromJson(r.getContent(), ScalarWebResult.class);
         } else {
             return new ScalarWebResult(r);
+        }
+    }
+
+    public static void setupHeader(String accessCode, SonyTransport... transports) {
+        for (SonyTransport transport : transports) {
+            transport.setOption(TransportOptionAutoAuth.FALSE);
+            transport.setOption(new TransportOptionHeader(NetUtil.createAccessCodeHeader(accessCode)));
+        }
+    }
+
+    public static void setupCookie(SonyTransport... transports) {
+        for (SonyTransport transport : transports) {
+            transport.setOption(TransportOptionAutoAuth.TRUE);
         }
     }
 

@@ -94,7 +94,7 @@ public class ScalarWebDiscoveryParticipant extends AbstractDiscoveryParticipant 
 
         final String modelName = getModelName(device);
         if (modelName == null || StringUtils.isEmpty(modelName)) {
-            logger.debug("Found Sony device but it has no model name - ignoring");
+            logger.debug("Found Sony device but it has no model name - ignoring: {}", device);
             return null;
         }
 
@@ -121,8 +121,14 @@ public class ScalarWebDiscoveryParticipant extends AbstractDiscoveryParticipant 
             return null;
         }
 
+        if (scalarWebService == null) {
+            logger.debug("Found sony device but ignored because of no scalar service: {}", device);
+            return null;
+        }
+
         final ThingUID uid = getThingUID(device);
         if (uid == null) {
+            // no need for log message as getThingUID spits them out
             return null;
         }
 
@@ -187,19 +193,19 @@ public class ScalarWebDiscoveryParticipant extends AbstractDiscoveryParticipant 
         final URL scalarURL = identity.getDescriptorURL();
 
         final ScalarWebConfig config = new ScalarWebConfig();
-        config.setCommandsMapFile("scalar-" + uid.getId() + ".map");
-        config.setDeviceMacAddress(getMacAddress(identity, uid));
         config.setDeviceAddress(scalarURL.toString());
         config.setIrccUrl(irccUrl == null ? "" : irccUrl);
 
-        DiscoveryResultBuilder resultBuilder = DiscoveryResultBuilder.create(uid).withProperties(config.asProperties())
-                .withLabel(getLabel(device, "Scalar"));
-        final String modelName = getModelName(device);
-        if (modelName != null && StringUtils.isNotEmpty(modelName)) {
-            resultBuilder = resultBuilder.withProperty(ScalarWebConstants.PROP_MODEL, modelName);
-        }
+        config.setDiscoveredCommandsMapFile("scalar-" + uid.getId() + ".map");
+        config.setDiscoveredMacAddress(getMacAddress(identity, uid));
+        config.setDiscoveredModelName(getModelName(device));
 
-        return resultBuilder.build();
+        return DiscoveryResultBuilder.create(uid)
+                .withProperties(config.asProperties())
+                .withProperty("ScalarUDN", UidUtils.getThingId(identity.getUdn()))
+                .withRepresentationProperty("ScalarUDN")
+                .withLabel(getLabel(device, "Scalar"))
+                .build();
     }
 
     /**

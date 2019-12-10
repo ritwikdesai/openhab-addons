@@ -84,7 +84,6 @@
 	<thing-type id="scalar">
 		<label>Sony Scalar Web</label>
 		<description>Sony Scalar Web</description>
-
 		<channel-groups>
 			<channel-group typeId="scalargroupaccesscontrol" id="accessControl" />
 			<channel-group typeId="scalargroupappcontrol" id="appControl" />
@@ -98,6 +97,7 @@
 			<channel-group typeId="scalargroupsystem" id="system" />
 			<channel-group typeId="scalargroupvideoscreen" id="videoScreen" />
 		</channel-groups>
+		<representation-property>ScalarUDN</representation-property>
 		<config-description-ref uri="thing-type:sony:scalarconfig" />
 
 	</thing-type>
@@ -1440,6 +1440,12 @@
 		<label>Playing Application Name</label>
 		<description>The application name currently playing</description>
 		<state readOnly="true" />
+	</channel-type>
+
+	<channel-type id="scalarwebavcontrolpresetchannel">
+		<item-type>String</item-type>
+		<label>Preset Channel</label>
+		<description>The preset channel</description>
 	</channel-type>
 
 	<channel-type id="scalarbrowseractivate">

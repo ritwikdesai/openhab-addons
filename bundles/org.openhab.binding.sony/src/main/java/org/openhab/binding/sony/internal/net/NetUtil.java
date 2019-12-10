@@ -23,6 +23,7 @@ import java.net.InetSocketAddress;
 import java.net.MalformedURLException;
 import java.net.Socket;
 import java.net.SocketTimeoutException;
+import java.net.URI;
 import java.net.URL;
 import java.util.Objects;
 
@@ -93,6 +94,16 @@ public class NetUtil {
 
         return port == -1 ? String.format("%s://%s", protocol, host)
                 : String.format("%s://%s:%d", protocol, host, port);
+    }
+
+    public static String getSonyUri(URI baseUri, String serviceName) {
+        Objects.requireNonNull(baseUri, "baseUri cannot be null");
+        Validate.notEmpty(serviceName, "serviceName cannot be empty");
+
+        final String protocol = baseUri.getScheme();
+        final String host = baseUri.getHost();
+
+        return String.format("%s://%s/sony/%s", protocol, host, serviceName);        
     }
 
     public static String getSonyUrl(URL baseUrl, String serviceName) {
@@ -225,7 +236,7 @@ public class NetUtil {
 
         final Socket socket = new Socket();
         try {
-            socket.setSoTimeout(3000);
+            socket.setSoTimeout(10000);
             socket.connect(new InetSocketAddress(ipAddress, port));
 
             PrintStream ps = new PrintStream(socket.getOutputStream());

@@ -45,14 +45,14 @@ public class ChannelIdCache {
         }
 
         // Make sure there is no duplicates
-        String id = validId;
+        String id = validId.toLowerCase();
 
         int i = 0;
-        while (cache.contains(id.toLowerCase())) {
+        while (cache.contains(id)) {
             id = validId + "-" + (++i);
         }
 
-        cache.add(id.toLowerCase());
+        cache.add(id);
 
         return id;
     }
