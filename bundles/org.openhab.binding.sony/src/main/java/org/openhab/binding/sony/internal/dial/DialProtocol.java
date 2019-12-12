@@ -126,7 +126,6 @@ class DialProtocol<T extends ThingCallback<String>> implements AutoCloseable {
      */
     @Nullable
     LoginUnsuccessfulResponse login() throws IOException {
-
         final String accessCode = config.getAccessCode();
 
         transport.setOption(TransportOptionAutoAuth.FALSE);

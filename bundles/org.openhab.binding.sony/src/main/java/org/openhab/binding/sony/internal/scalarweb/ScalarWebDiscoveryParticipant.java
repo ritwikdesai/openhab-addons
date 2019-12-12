@@ -200,9 +200,10 @@ public class ScalarWebDiscoveryParticipant extends AbstractDiscoveryParticipant 
         config.setDiscoveredMacAddress(getMacAddress(identity, uid));
         config.setDiscoveredModelName(getModelName(device));
 
+        final String thingId = UidUtils.getThingId(identity.getUdn());
         return DiscoveryResultBuilder.create(uid)
                 .withProperties(config.asProperties())
-                .withProperty("ScalarUDN", UidUtils.getThingId(identity.getUdn()))
+                .withProperty("ScalarUDN", thingId == null || StringUtils.isEmpty(thingId) ? uid.getId() : thingId)
                 .withRepresentationProperty("ScalarUDN")
                 .withLabel(getLabel(device, "Scalar"))
                 .build();

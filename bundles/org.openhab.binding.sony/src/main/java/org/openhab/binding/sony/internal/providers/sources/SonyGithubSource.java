@@ -25,7 +25,6 @@ import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.AbstractMap;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
@@ -83,7 +82,7 @@ import org.openhab.binding.sony.internal.transports.TransportOptionHeader;
 public class SonyGithubSource extends AbstractSonySource {
     // ---- various constants used by this class ----
     private static final String FOLDERBASE = ConfigConstants.getUserDataFolder() + File.separator + "sony";
-    private static final SimpleDateFormat WEBDATEPATTER = new SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss zzz");
+    private static final String WEBDATEPATTERN = "EEE, dd MMM yyyy HH:mm:ss zzz";
 
     private static final String PROP_APIKEY = "SonyGithubSource.Api.Key";
     private static final String PROP_APIURL = "SonyGithubSource.Api.Url";
@@ -108,7 +107,7 @@ public class SonyGithubSource extends AbstractSonySource {
     private static final String PROP_LABELTHINGTYPE = "SonyGithubSource.Label.ThingType";
 
     private static final String GITHUB_CODEFENCE = "```";
-    private static final TransportOptionHeader RawHeader = new TransportOptionHeader("Accept",
+    private static final TransportOptionHeader GITHUB_RAWHEADER = new TransportOptionHeader("Accept",
             "application/vnd.github.VERSION.raw");
 
     // ---- Various constants read from SonyDefinitionProviderImpl.properties ----
@@ -177,14 +176,14 @@ public class SonyGithubSource extends AbstractSonySource {
     /**
      * Constructs the source and starts the various threads
      * 
-     * @param scheduler  a non-null scheduler to use
+     * @param scheduler a non-null scheduler to use
      * @param properties a non-null, possibly empty map of properties
      */
     public SonyGithubSource(ScheduledExecutorService scheduler, Map<String, String> properties) {
         Objects.requireNonNull(scheduler, "scheduler cannot be null");
         Objects.requireNonNull(properties, "properties cannot be null");
 
-        apiKey = getProperty(properties, PROP_APIKEY);
+        apiKey = new String(java.util.Base64.getDecoder().decode(getProperty(properties, PROP_APIKEY)));
 
         final String apiUrl = getProperty(properties, PROP_APIURL);
         try {
@@ -263,7 +262,7 @@ public class SonyGithubSource extends AbstractSonySource {
             boolean found = false;
             for (int i = 0; i < 100; i++) {
                 final String fileName = URLEncoder.encode(modelName + (i == 0 ? "" : ("-" + i)) + ".json", "UTF-8");
-                final HttpResponse defResp = transport.executeGet(apiDefThingTypes + "/" + fileName, RawHeader);
+                final HttpResponse defResp = transport.executeGet(apiDefThingTypes + "/" + fileName, GITHUB_RAWHEADER);
 
                 if (defResp.getHttpCode() == HttpStatus.OK_200) {
                     final SonyThingDefinition oldDef = gson.fromJson(defResp.getContent(), SonyThingDefinition.class);
@@ -287,7 +286,7 @@ public class SonyGithubSource extends AbstractSonySource {
                 ja.add(labelThingType);
                 jo.add("labels", ja);
 
-                final HttpResponse resp = transport.executePostJson(apiOpenHABIssues, gson.toJson(jo), RawHeader);
+                final HttpResponse resp = transport.executePostJson(apiOpenHABIssues, gson.toJson(jo), GITHUB_RAWHEADER);
                 if (resp.getHttpCode() != HttpStatus.CREATED_201) {
                     logger.debug("Error posting service change: {} \r\n{}", resp, body);
                 }
@@ -344,7 +343,7 @@ public class SonyGithubSource extends AbstractSonySource {
             boolean found = false;
             for (int i = 0; i < 100; i++) {
                 final String fileName = URLEncoder.encode(modelName + (i == 0 ? "" : ("-" + i)) + ".json", "UTF-8");
-                final HttpResponse defResp = transport.executeGet(apiDefCapabilities + "/" + fileName, RawHeader);
+                final HttpResponse defResp = transport.executeGet(apiDefCapabilities + "/" + fileName, GITHUB_RAWHEADER);
 
                 if (defResp.getHttpCode() == HttpStatus.OK_200) {
                     final SonyDeviceCapability oldCap = gson.fromJson(defResp.getContent(), SonyDeviceCapability.class);
@@ -370,7 +369,7 @@ public class SonyGithubSource extends AbstractSonySource {
                 ja.add(labelCapability);
                 jo.add("labels", ja);
 
-                final HttpResponse resp = transport.executePostJson(apiOpenHABIssues, gson.toJson(jo), RawHeader);
+                final HttpResponse resp = transport.executePostJson(apiOpenHABIssues, gson.toJson(jo), GITHUB_RAWHEADER);
                 if (resp.getHttpCode() != HttpStatus.CREATED_201) {
                     logger.debug("Error posting service change: {} \r\n{}", resp, body);
                 }
@@ -413,7 +412,7 @@ public class SonyGithubSource extends AbstractSonySource {
                     ja.add(labelService);
                     jo.add("labels", ja);
 
-                    final HttpResponse resp = transport.executePostJson(apiDevIssues, gson.toJson(jo), RawHeader);
+                    final HttpResponse resp = transport.executePostJson(apiDevIssues, gson.toJson(jo), GITHUB_RAWHEADER);
                     if (resp.getHttpCode() != HttpStatus.CREATED_201) {
                         logger.debug("Error posting service change: {} \r\n{}", resp, body);
                     }
@@ -423,8 +422,7 @@ public class SonyGithubSource extends AbstractSonySource {
                 // Get all the various methods for the service name (across all service
                 // versions)
                 final List<ScalarWebMethod> mstrMethods = masterServices.stream()
-                        .flatMap(srv -> srv.getMethods().stream())
-                        .collect(Collectors.toList());
+                        .flatMap(srv -> srv.getMethods().stream()).collect(Collectors.toList());
 
                 // Find the method and if not, post an issue
                 for (ScalarWebMethod mth : deviceService.getMethods()) {
@@ -446,15 +444,14 @@ public class SonyGithubSource extends AbstractSonySource {
                         ja.add(labelMethod);
                         jo.add("labels", ja);
 
-                        final HttpResponse resp = transport.executePostJson(apiDevIssues, gson.toJson(jo), RawHeader);
+                        final HttpResponse resp = transport.executePostJson(apiDevIssues, gson.toJson(jo), GITHUB_RAWHEADER);
                         if (resp.getHttpCode() != HttpStatus.CREATED_201) {
                             logger.debug("Error posting service change: {} \r\n{}", resp, body);
                         }
                     }
                 }
             }
-        } catch(IOException|JsonSyntaxException|URISyntaxException e)
-        {
+        } catch (IOException | JsonSyntaxException | URISyntaxException e) {
             logger.debug("Exception writing service/method capabilities: {}", e.getMessage(), e);
         }
     }
@@ -472,7 +469,7 @@ public class SonyGithubSource extends AbstractSonySource {
 
         // go up to a maximum of 100 pages!
         for (int t = 0; t < 100; t++) {
-            final HttpResponse resp = transport.executeGet(uri, RawHeader);
+            final HttpResponse resp = transport.executeGet(uri, GITHUB_RAWHEADER);
             if (resp.getHttpCode() == HttpStatus.OK_200) {
                 final String content = resp.getContent();
                 final JsonArray ja = gson.fromJson(content, JsonArray.class);
@@ -528,7 +525,7 @@ public class SonyGithubSource extends AbstractSonySource {
         try {
             capabilitiesLock.lock();
 
-            final HttpResponse resp = transport.executeGet(apiRestJson, RawHeader, new TransportOptionHeader(
+            final HttpResponse resp = transport.executeGet(apiRestJson, GITHUB_RAWHEADER, new TransportOptionHeader(
                     HttpHeader.IF_NONE_MATCH,
                     capabilitiesEtag == null || StringUtils.isEmpty(capabilitiesEtag) ? "1" : capabilitiesEtag));
             if (resp.getHttpCode() == HttpStatus.OK_200) {
@@ -556,7 +553,7 @@ public class SonyGithubSource extends AbstractSonySource {
         try {
             metaLock.lock();
 
-            final HttpResponse resp = transport.executeGet(apiMetaJson, RawHeader, new TransportOptionHeader(
+            final HttpResponse resp = transport.executeGet(apiMetaJson, GITHUB_RAWHEADER, new TransportOptionHeader(
                     HttpHeader.IF_NONE_MATCH, metaEtag == null || StringUtils.isEmpty(metaEtag) ? "1" : metaEtag));
 
             if (resp.getHttpCode() == HttpStatus.OK_200) {
@@ -581,7 +578,7 @@ public class SonyGithubSource extends AbstractSonySource {
         try {
             // save the modelnames in the file
             knownThingsLock.lock();
-            final HttpResponse resp = transport.executeGet(apiThingTypes, RawHeader,
+            final HttpResponse resp = transport.executeGet(apiThingTypes, GITHUB_RAWHEADER,
                     new TransportOptionHeader(HttpHeader.IF_NONE_MATCH, thingTypesEtag == null ? "1" : thingTypesEtag));
 
             if (resp.getHttpCode() == HttpStatus.OK_200) {
@@ -611,11 +608,11 @@ public class SonyGithubSource extends AbstractSonySource {
                         final String name = nameElement.getAsString();
                         final Long lastModified = files.remove(name);
 
-                        final Map.Entry<@Nullable Long, @Nullable SonyThingDefinition[]> defs = getThingDefinition(name,
-                                lastModified);
+                        final ModifiedThingDefinitions mtd = getThingDefinition(name, lastModified);
+
                         // If not null, then we have a new or updated file...
-                        if (defs != null && defs.getKey() != null && defs.getValue() != null) {
-                            final List<Map.Entry<String, String>> modelNames = Arrays.stream(defs.getValue())
+                        if (mtd.modified != null && mtd.definitions.size() > 0) {
+                            final List<Map.Entry<String, String>> modelNames = mtd.definitions.stream().filter(e -> e != null)
                                     .map(e -> new AbstractMap.SimpleEntry<>(e.getService(), e.getModelName()))
                                     .collect(Collectors.toList());
 
@@ -629,11 +626,11 @@ public class SonyGithubSource extends AbstractSonySource {
                             final File theFile = thingTypePath.resolve(name).toFile();
 
                             // always execute isWaiting since it (also) removes the model name waiting
-                            final boolean isWaiting = waitingModelNames
-                                    .removeIf(m -> modelNames.stream().anyMatch(mn -> SonyUtil.isModelMatch(mn.getKey(), mn.getValue(), m.getKey(), m.getValue())));
+                            final boolean isWaiting = waitingModelNames.removeIf(m -> modelNames.stream().anyMatch(
+                                    mn -> SonyUtil.isModelMatch(mn.getKey(), mn.getValue(), m.getKey(), m.getValue())));
 
                             if (theFile.exists() || isWaiting) {
-                                writeThingDefinition(name, defs.getKey(), defs.getValue());
+                                writeThingDefinition(name, mtd.modified, mtd.definitions);
                             }
                         }
                     } else {
@@ -667,21 +664,21 @@ public class SonyGithubSource extends AbstractSonySource {
         }
     }
 
-    private Map.Entry<@Nullable Long, @Nullable SonyThingDefinition[]> getThingDefinition(String name,
-            @Nullable Long lastModified) {
+    private ModifiedThingDefinitions getThingDefinition(String name, @Nullable Long lastModified) {
         Validate.notEmpty(name, "name cannot be empty");
 
-        final String ifModifiedSince = WEBDATEPATTER
+        final SimpleDateFormat webDateFormat = new SimpleDateFormat(WEBDATEPATTERN);
+        final String ifModifiedSince = webDateFormat
                 .format(lastModified == null ? new Date(0) : new Date(lastModified));
 
-        final HttpResponse fileResponse = transport.executeGet(apiThingTypes + "/" + name, RawHeader,
+        final HttpResponse fileResponse = transport.executeGet(apiThingTypes + "/" + name, GITHUB_RAWHEADER,
                 new TransportOptionHeader(HttpHeader.IF_MODIFIED_SINCE, ifModifiedSince));
 
         if (fileResponse.getHttpCode() == HttpStatus.OK_200) {
             final String lastModifiedResponse = fileResponse.getResponseHeader(HttpHeader.LAST_MODIFIED.asString());
             long lastModifiedTime;
             try {
-                lastModifiedTime = WEBDATEPATTER.parse(lastModifiedResponse).getTime();
+                lastModifiedTime = webDateFormat.parse(lastModifiedResponse).getTime();
             } catch (ParseException e) {
                 lastModifiedTime = System.currentTimeMillis();
                 logger.debug(
@@ -693,10 +690,9 @@ public class SonyGithubSource extends AbstractSonySource {
 
             final JsonElement def = gson.fromJson(fileContents, JsonElement.class);
             if (def.isJsonArray()) {
-                return new AbstractMap.SimpleEntry<>(lastModifiedTime, gson.fromJson(def, SonyThingDefinition[].class));
+                return new ModifiedThingDefinitions(lastModifiedTime, gson.fromJson(def, SonyThingDefinition.LISTTYPETOKEN));
             } else {
-                return new AbstractMap.SimpleEntry<>(lastModifiedTime,
-                        new SonyThingDefinition[] { gson.fromJson(def, SonyThingDefinition.class) });
+                return new ModifiedThingDefinitions(lastModifiedTime, Collections.singletonList(gson.fromJson(def, SonyThingDefinition.class)));
             }
         } else if (fileResponse.getHttpCode() == HttpStatus.NOT_MODIFIED_304) {
             logger.debug("Definitions for {} were not modified from {}", name, lastModified);
@@ -707,14 +703,14 @@ public class SonyGithubSource extends AbstractSonySource {
 
         // grr - can't return null here. @Nullable can't be used on Map.Entry so we
         // return this instead
-        return new AbstractMap.SimpleEntry<>(null, null);
+        return new ModifiedThingDefinitions();
     }
 
-    private void writeThingDefinition(String name, long lastModifiedTime, SonyThingDefinition[] ttds)
+    private void writeThingDefinition(String name, long lastModifiedTime, List<SonyThingDefinition> ttds)
             throws IOException {
         Validate.notEmpty(name, "name cannot be empty");
         Objects.requireNonNull(ttds, "ttds cannot be null");
-        if (ttds.length == 0) {
+        if (ttds.size() == 0) {
             throw new IllegalArgumentException("ttds cannot be empty");
         }
 
@@ -747,8 +743,9 @@ public class SonyGithubSource extends AbstractSonySource {
             // Find out if we know this model name yet...
             final @Nullable String fileName = knownThingTypes.entrySet().stream()
                     .flatMap(e -> e.getValue().stream().map(f -> new AbstractMap.SimpleEntry<>(e.getKey(), f)))
-                    .filter(e -> SonyUtil.isModelMatch(e.getValue().getKey(), e.getValue().getValue(), serviceName, modelName)).map(e -> e.getKey())
-                    .filter(e -> e != null).findAny().orElse(null);
+                    .filter(e -> SonyUtil.isModelMatch(e.getValue().getKey(), e.getValue().getValue(), serviceName,
+                            modelName))
+                    .map(e -> e.getKey()).filter(e -> e != null).findAny().orElse("");
 
             // If we found the file name
             // ... it exists - do nothing (super.addListener should have done it)
@@ -759,10 +756,9 @@ public class SonyGithubSource extends AbstractSonySource {
                 final File theFile = thingTypePath.resolve(fileName).toFile();
                 if (!theFile.exists()) {
                     try {
-                        final Map.Entry<@Nullable Long, @Nullable SonyThingDefinition[]> defs = getThingDefinition(
-                                fileName, null);
-                        if (defs != null && defs.getKey() != null && defs.getValue() != null) {
-                            writeThingDefinition(fileName, defs.getKey(), defs.getValue());
+                        final ModifiedThingDefinitions mtd = getThingDefinition(fileName, null);
+                        if (mtd.modified != null && mtd.definitions.size() > 0) {
+                            writeThingDefinition(fileName, mtd.modified, mtd.definitions);
                         }
                     } catch (IOException e) {
                         logger.debug("Exception reading device capabilities from github: {}", fileName);
@@ -792,13 +788,21 @@ public class SonyGithubSource extends AbstractSonySource {
 
         public String getModelName(String modelName) {
             Validate.notEmpty(modelName, "modelName cannot be empty");
+
             if (convert == null) {
                 return modelName;
             }
-            return convert.stream()
-                    .filter(s -> StringUtils.equalsIgnoreCase(s.modelName, modelName)
-                            && StringUtils.isNotBlank(s.convName))
-                    .map(s -> s.convName).filter(s -> s != null).findAny().orElse(modelName);
+            for (MetaConvert mc : convert) {
+                if (mc != null) {
+                    final String cName = mc.getConvName();
+                    final String mName = mc.getModelName();
+                    if (mName != null && StringUtils.equalsIgnoreCase(mName, modelName) && cName != null
+                            && StringUtils.isNotBlank(cName)) {
+                        return cName;
+                    }
+                }
+            }
+            return modelName;
         }
     }
 
@@ -812,6 +816,21 @@ public class SonyGithubSource extends AbstractSonySource {
 
         public @Nullable String getConvName() {
             return convName;
+        }
+    }
+
+    class ModifiedThingDefinitions {
+        private final @Nullable Long modified;
+        private final List<SonyThingDefinition> definitions;
+
+        ModifiedThingDefinitions() {
+            this.modified = null;
+            this.definitions = new ArrayList<>();
+        }
+
+        ModifiedThingDefinitions(@Nullable Long modified, @Nullable List<@Nullable SonyThingDefinition> definitions) {
+            this.modified = modified;
+            this.definitions = SonyUtil.convertNull(definitions);
         }
     }
 

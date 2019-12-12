@@ -86,8 +86,9 @@ public class IrccDiscoveryParticipant extends AbstractDiscoveryParticipant imple
 
         config.setDeviceAddress(irccURL.toString());
 
+        final String thingId = UidUtils.getThingId(identity.getUdn());
         return DiscoveryResultBuilder.create(uid).withProperties(config.asProperties())
-                .withProperty("IrccUDN", UidUtils.getThingId(identity.getUdn()))
+                .withProperty("IrccUDN",  thingId == null || StringUtils.isEmpty(thingId) ? uid.getId() : thingId)
                 .withRepresentationProperty("IrccUDN")
                 .withLabel(getLabel(device, "IRCC")).build();
     }

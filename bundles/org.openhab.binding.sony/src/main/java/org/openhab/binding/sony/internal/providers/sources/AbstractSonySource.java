@@ -19,6 +19,7 @@ import java.net.URISyntaxException;
 import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -206,16 +207,16 @@ public abstract class AbstractSonySource implements SonySource {
 
         final JsonElement def = gson.fromJson(contents, JsonElement.class);
         if (def.isJsonArray()) {
-            final SonyThingDefinition[] ttds = gson.fromJson(def, SonyThingDefinition[].class);
+            final List<SonyThingDefinition> ttds = gson.fromJson(def, SonyThingDefinition.LISTTYPETOKEN);
             return addThingDefinitions(fileName, ttds);
         } else {
             final SonyThingDefinition ttd = gson.fromJson(def, SonyThingDefinition.class);
-            return addThingDefinitions(fileName, new SonyThingDefinition[] { ttd });
+            return addThingDefinitions(fileName, Collections.singletonList(ttd));
         }
     }
 
     protected List<Map.Entry<ThingType, SonyThingDefinition>> addThingDefinitions(String referenceName,
-            SonyThingDefinition[] ttds) {
+            List<SonyThingDefinition> ttds) {
         logger.debug("Processing {}", referenceName);
         int idx = 0;
 

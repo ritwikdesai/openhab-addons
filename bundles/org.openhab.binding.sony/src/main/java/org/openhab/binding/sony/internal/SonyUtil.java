@@ -21,6 +21,9 @@ import java.io.PrintWriter;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.AbstractMap;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -369,7 +372,7 @@ public class SonyUtil {
      */
     public static boolean equalsIgnoreCase(@Nullable Map<@Nullable String, @Nullable String> map1,
             @Nullable Map<@Nullable String, @Nullable String> map2) {
-        if (map1 == map2) {
+        if (map1 == null && map2 == null) {
             return true;
         }
 
@@ -401,7 +404,7 @@ public class SonyUtil {
      * @return true if they match, false otherwise
      */
     public static boolean equalsIgnoreCase(@Nullable Set<@Nullable String> set1, @Nullable Set<@Nullable String> set2) {
-        if (set1 == set2) {
+        if (set1 == null && set2 == null) {
             return true;
         }
 
@@ -508,5 +511,21 @@ public class SonyUtil {
         final String uidServiceName = getServiceName(uid);
         final String uidModelName = getModelName(uid);
         return uidModelName == null || StringUtils.isEmpty(uidModelName) ? false : isModelMatch(uidServiceName, uidModelName, serviceName, modelName);
+    }
+
+    public static <T> List<T> convertNull(@Nullable List<@Nullable T> list) {
+        if (list == null) {
+            return new ArrayList<>();
+        }
+
+        return list.stream().filter(e -> e != null).collect(Collectors.toList());
+    }
+
+    public static <T> List<T> convertNull(@Nullable T @Nullable[] list) {
+        if (list == null) {
+            return new ArrayList<>();
+        }
+
+        return Arrays.stream(list).filter(e -> e != null).collect(Collectors.toList());
     }
 }

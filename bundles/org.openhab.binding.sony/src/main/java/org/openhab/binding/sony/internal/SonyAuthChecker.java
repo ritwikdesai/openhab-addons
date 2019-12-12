@@ -43,7 +43,6 @@ public class SonyAuthChecker {
         if (localAccessCode != null && !StringUtils.equalsIgnoreCase(ScalarWebConstants.ACCESSCODE_RQST, localAccessCode)) {
             final TransportOptionHeader authHeader = new TransportOptionHeader(NetUtil.createAccessCodeHeader(localAccessCode));
             try {
-
                 transport.setOption(authHeader);
                 if (AccessResult.OK.equals(checkResult.checkResult())) {
                     return CheckResult.OK_HEADER;

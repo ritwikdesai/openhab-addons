@@ -12,12 +12,15 @@
  */
 package org.openhab.binding.sony.internal.providers.models;
 
+import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+
+import com.google.gson.reflect.TypeToken;
 
 import org.apache.commons.lang.StringUtils;
 import org.apache.commons.lang.Validate;
@@ -42,6 +45,9 @@ import org.openhab.binding.sony.internal.SonyUtil;
  */
 @NonNullByDefault
 public class SonyThingDefinition implements SonyMatcher {
+    /** List<SonyThingDefinition> type token for gson deserialization */
+    public static final Type LISTTYPETOKEN = new TypeToken<ArrayList<SonyThingDefinition>>() { }.getType();
+    
     /** The associated service (scalar, etc) */
     private @Nullable String service;
 
@@ -142,8 +148,19 @@ public class SonyThingDefinition implements SonyMatcher {
         if (localChannelGroups == null) {
             return new HashMap<>();
         }
-        return localChannelGroups.entrySet().stream().filter(e -> e.getKey() != null && e.getValue() != null)
-                .collect(Collectors.toMap(k -> k.getKey(), v -> v.getValue()));
+
+        // ugly nullable work around
+        final Map<String, String> rc = new HashMap<>();
+        localChannelGroups.entrySet().stream().forEach(e -> {
+            final String localKey = e.getKey();
+            final String localValue = e.getValue();
+            if (localKey != null && StringUtils.isNotEmpty(localKey) && localValue != null
+                    && StringUtils.isNotEmpty(localValue)) {
+                rc.put(localKey, localValue);
+            }
+        });
+        
+        return rc;
     }
 
     /**
@@ -189,7 +206,7 @@ public class SonyThingDefinition implements SonyMatcher {
         return StringUtils.equalsIgnoreCase(service, other.service)
                 && StringUtils.equalsIgnoreCase(modelName, other.modelName)
                 && SonyUtil.equalsIgnoreCase(channelGroups, other.channelGroups)
-                && SonyMatcherUtils.matches(channels, other.channels, SonyThingChannelDefinition.COMPARATOR);
+                && SonyMatcherUtils.matches(SonyUtil.convertNull(channels), SonyUtil.convertNull(other.channels), SonyThingChannelDefinition.COMPARATOR);
     }
 
     @Override

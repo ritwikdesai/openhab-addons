@@ -111,8 +111,7 @@ public class IrccClient {
     public IrccClient(String irccUrl) throws IOException, URISyntaxException {
         Validate.notEmpty(irccUrl, "irccUrl cannot be empty");
 
-        try (SonyTransport transport = new SonyHttpTransport(irccUrl, GsonUtilities.getDefaultGson())) {
-            
+        try (SonyTransport transport = new SonyHttpTransport(irccUrl, GsonUtilities.getDefaultGson())) {            
             final HttpResponse resp = transport.executeGet(irccUrl);
             if (resp.getHttpCode() != HttpStatus.OK_200) {
                 throw resp.createException();

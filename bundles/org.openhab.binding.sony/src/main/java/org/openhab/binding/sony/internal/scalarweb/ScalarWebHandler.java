@@ -201,7 +201,6 @@ public class ScalarWebHandler extends AbstractThingHandler<ScalarWebConfig> {
 
     @Override
     protected void connect() {
-
         final ScalarWebConfig config = getSonyConfig();
 
         final String scalarWebUrl = config.getDeviceAddress();
