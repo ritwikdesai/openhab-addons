@@ -17,6 +17,7 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
+import java.util.stream.Collectors;
 
 import org.apache.commons.lang.StringUtils;
 import org.apache.commons.lang.Validate;
@@ -56,10 +57,10 @@ public class SonyServiceCapability implements SonyMatcher {
     /**
      * Constructs the capability from the parameters
      *
-     * @param serviceName   a non-null, non-empty service name
-     * @param version       a non-null, non-empty service version
-     * @param transport     a non-null, non-empty transport
-     * @param methods       a non-null, possibly empty list of methods
+     * @param serviceName a non-null, non-empty service name
+     * @param version a non-null, non-empty service version
+     * @param transport a non-null, non-empty transport
+     * @param methods a non-null, possibly empty list of methods
      * @param notifications a non-null, possibly empty list of notifications
      */
     public SonyServiceCapability(String serviceName, String version, String transport, List<ScalarWebMethod> methods,
@@ -108,11 +109,28 @@ public class SonyServiceCapability implements SonyMatcher {
 
         final SonyServiceCapability other = (SonyServiceCapability) obj;
 
+        // The biggest issue with all this is how to deal with unknown (-1) variations.  This is where we know about an API but we have no information about it (no parms, no return codes).  This will happen in a few different instances:
+        // 1. A service that doesn't seem to be active or depends on some criteria that isn't availble at the time we queried (contentshare service)
+        // 2. Specific methods that aren't active at the time we queried (volume methods unavilable if device is off)
+        //
+        // The approach is to basically ONLY compare information where those capabilities are not unknown (-1)
+        // and (via SonyMatcherUtils.matches) only check for NEW information
+        
         return StringUtils.equalsIgnoreCase(serviceName, other.serviceName)
                 && StringUtils.equalsIgnoreCase(version, other.version)
                 && StringUtils.equalsIgnoreCase(transport, other.transport)
-                && SonyMatcherUtils.matches(methods, other.methods, ScalarWebMethod.COMPARATOR)
-                && SonyMatcherUtils.matches(notifications, other.notifications, ScalarWebMethod.COMPARATOR);
+                && SonyMatcherUtils.matches(
+                        methods.stream().filter(e -> e.getVariation() != ScalarWebMethod.UNKNOWN_VARIATION)
+                                .collect(Collectors.toList()),
+                        other.methods.stream().filter(e -> e.getVariation() != ScalarWebMethod.UNKNOWN_VARIATION)
+                                .collect(Collectors.toList()),
+                        ScalarWebMethod.COMPARATOR)
+                && SonyMatcherUtils.matches(
+                        notifications.stream().filter(e -> e.getVariation() != ScalarWebMethod.UNKNOWN_VARIATION)
+                                .collect(Collectors.toList()),
+                        other.notifications.stream().filter(e -> e.getVariation() != ScalarWebMethod.UNKNOWN_VARIATION)
+                                .collect(Collectors.toList()),
+                        ScalarWebMethod.COMPARATOR);
     }
 
     @Override

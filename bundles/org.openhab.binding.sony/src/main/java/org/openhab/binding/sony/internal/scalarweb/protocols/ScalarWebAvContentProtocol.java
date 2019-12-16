@@ -1724,10 +1724,10 @@ class ScalarWebAvContentProtocol<T extends ThingCallback<String>> extends Abstra
         }
 
         // TODO: find out description format
-        //final Description desc = clr.getDescription();
-        //if (desc != null) {
-            // stateChanged(CN_DESCRIPTION, SonyUtil.newStringType(desc.));
-        //}
+        // final Description desc = clr.getDescription();
+        // if (desc != null) {
+        // stateChanged(CN_DESCRIPTION, SonyUtil.newStringType(desc.));
+        // }
         stateChanged(CN_DIRECTREMOTENUM, SonyUtil.newDecimalType(clr.getDirectRemoteNum()));
         stateChanged(CN_DISPNUM, SonyUtil.newStringType(clr.getDispNum()));
 
@@ -2230,9 +2230,11 @@ class ScalarWebAvContentProtocol<T extends ThingCallback<String>> extends Abstra
                     ScalarWebMethod.GETPLAYBACKMODESETTINGS, PLAYBACKSETTINGS);
         }
 
-        if (tracker.isCategoryLinked(PS_CHANNEL)) {
-            refreshPresetChannelStateDescription(tracker.getLinkedChannelsForCategory(PS_CHANNEL));
-        }
+        // Very heavy call - let's just make them restart binding when a preset changes if they
+        // want it to show up on a dynamic state for the UI
+        // if (tracker.isCategoryLinked(PS_CHANNEL)) {
+        //     refreshPresetChannelStateDescription(tracker.getLinkedChannelsForCategory(PS_CHANNEL));
+        // }
     }
 
     @Override
@@ -2544,20 +2546,24 @@ class ScalarWebAvContentProtocol<T extends ThingCallback<String>> extends Abstra
         Validate.notEmpty(srcId, "srcId cannot be empty");
         Validate.notEmpty(dispName, "dispName cannot be empty");
 
-        processContentList(srcId, res -> {
-            if (StringUtils.equalsIgnoreCase(dispName, res.getDispNum())) {
-                final String uri = res.getUri();
-                if (uri == null) {
-                    logger.debug(
-                            "Cannot play preset channel {} because the ContentListResult didn't have a valid URI: {}",
-                            dispName, res);
-                } else {
-                    setPlayContent(uri, null, true);
+        try {
+            processContentList(srcId, res -> {
+                if (StringUtils.equalsIgnoreCase(dispName, res.getDispNum())) {
+                    final String uri = res.getUri();
+                    if (uri == null) {
+                        logger.debug(
+                                "Cannot play preset channel {} because the ContentListResult didn't have a valid URI: {}",
+                                dispName, res);
+                    } else {
+                        setPlayContent(uri, null, true);
+                    }
+                    return false;
                 }
-                return false;
-            }
-            return true;
-        });
+                return true;
+            });
+        } catch (Throwable t) {
+            logger.debug(">>> {}", t.getMessage(), t);
+        }
     }
 
     private void refreshPresetChannelStateDescription(List<ScalarWebChannel> channels) {

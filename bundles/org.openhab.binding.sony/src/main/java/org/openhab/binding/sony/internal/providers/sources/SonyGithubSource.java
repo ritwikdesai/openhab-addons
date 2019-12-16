@@ -75,7 +75,7 @@ import org.openhab.binding.sony.internal.transports.TransportOptionHeader;
 /**
  * An implementation of a {@link SonySource} that will source thing types from
  * json files within the user data folder
- *
+ * 
  * @author Tim Roberts - Initial contribution
  */
 @NonNullByDefault
@@ -300,14 +300,6 @@ public class SonyGithubSource extends AbstractSonySource {
     public void writeDeviceCapabilities(SonyDeviceCapability deviceCapability) {
         Objects.requireNonNull(deviceCapability, "deviceCapability cannot be null");
 
-        if (deviceCapability.getServices().stream().flatMap(s -> s.getMethods().stream())
-                .anyMatch(m -> m.getVariation() == ScalarWebMethod.UNKNOWN_VARIATION)) {
-            logger.debug(
-                    "Cannot write device capabilities because capabilities had an unknown variation and should be ignored: {}",
-                    deviceCapability);
-            return;
-        }
-
         final String ttModelName = deviceCapability.getModelName();
         if (ttModelName == null || StringUtils.isEmpty(ttModelName)) {
             logger.debug("Cannot write device capabilities because it has no model name: {}", deviceCapability);
@@ -416,7 +408,6 @@ public class SonyGithubSource extends AbstractSonySource {
                     if (resp.getHttpCode() != HttpStatus.CREATED_201) {
                         logger.debug("Error posting service change: {} \r\n{}", resp, body);
                     }
-
                 }
 
                 // Get all the various methods for the service name (across all service

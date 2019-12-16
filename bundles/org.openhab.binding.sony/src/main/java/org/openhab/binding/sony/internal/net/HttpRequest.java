@@ -61,8 +61,8 @@ public class HttpRequest implements AutoCloseable {
         // NOTE: assumes jersey client (no JAX compliant way of doing this)
         // NOTE2: jax 2.1 has a way but we don't use that
         final ClientConfig configuration = new ClientConfig();
-        configuration.property(ClientProperties.CONNECT_TIMEOUT, 2000);
-        configuration.property(ClientProperties.READ_TIMEOUT, 2000);
+        configuration.property(ClientProperties.CONNECT_TIMEOUT, 5000);
+        configuration.property(ClientProperties.READ_TIMEOUT, 5000);
 
         client = ClientBuilder.newClient(configuration);
 
@@ -100,7 +100,7 @@ public class HttpRequest implements AutoCloseable {
             } finally {
                 content.close();
             }
-        } catch (ProcessingException | IOException e) {
+        } catch (ProcessingException | IllegalStateException | IOException e) {
             return new HttpResponse(HttpStatus.SERVICE_UNAVAILABLE_503, e.getMessage());
         }
     }
