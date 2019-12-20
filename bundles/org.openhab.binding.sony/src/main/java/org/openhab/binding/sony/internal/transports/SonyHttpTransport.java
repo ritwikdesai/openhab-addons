@@ -112,8 +112,8 @@ public class SonyHttpTransport extends AbstractSonyTransport {
                 if (payload instanceof TransportPayloadScalarWebRequest) {
                     return executePostJson((TransportPayloadScalarWebRequest) payload, options).thenApply(r -> {
                         if (r.getResponse().getHttpCode() == HttpStatus.OK_200) {
-                            final ScalarWebResult res = gson.fromJson(r.getResponse().getContent(),
-                                    ScalarWebResult.class);
+                            final String content = r.getResponse().getContent();
+                            final ScalarWebResult res = gson.fromJson(content, ScalarWebResult.class);
                             return new TransportResultScalarWebResult(res);
                         } else {
                             return new TransportResultScalarWebResult(new ScalarWebResult(r.getResponse()));

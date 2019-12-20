@@ -102,7 +102,7 @@ public class IrccClientFactory {
     
         URL baseUrl = irccUrl;
         
-        logger.debug("Testing Default IRCC client to see if it's a TV/AVR or BlURAY: {}{}", baseUrl, LIKELY_TVAVR_SCPD);
+        logger.debug("Testing Default IRCC client to see if it's a TV/AVR or BLURAY: {}{}", baseUrl, LIKELY_TVAVR_SCPD);
         try (SonyTransport transport = new SonyHttpTransport(baseUrl.toExternalForm(),
                 GsonUtilities.getDefaultGson())) {
             final HttpResponse tvavr = transport.executeGet(new URL(baseUrl, LIKELY_TVAVR_SCPD).toExternalForm());

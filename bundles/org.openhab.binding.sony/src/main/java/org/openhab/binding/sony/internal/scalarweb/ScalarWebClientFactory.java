@@ -24,6 +24,11 @@ import org.apache.commons.lang.Validate;
 import org.eclipse.jdt.annotation.NonNullByDefault;
 import org.eclipse.jetty.http.HttpStatus;
 import org.openhab.binding.sony.internal.net.HttpResponse;
+import org.openhab.binding.sony.internal.scalarweb.gson.GsonUtilities;
+import org.openhab.binding.sony.internal.scalarweb.models.ScalarWebMethod;
+import org.openhab.binding.sony.internal.scalarweb.models.ScalarWebRequest;
+import org.openhab.binding.sony.internal.scalarweb.models.ScalarWebResult;
+import org.openhab.binding.sony.internal.transports.SonyHttpTransport;
 import org.openhab.binding.sony.internal.transports.SonyTransport;
 import org.openhab.binding.sony.internal.transports.SonyTransportFactory;
 import org.slf4j.Logger;
@@ -48,6 +53,15 @@ public class ScalarWebClientFactory {
     private static final String LIKELY_PATH = "/sony";
     private static final int LIKELY_PORT = -1;
 
+    /** Default audio port for soundbars/receiver (websocket) */
+    private static final int HOME_AUDIO_PORT = 10000;
+    
+    /** Default audio port for wireless speakers (websocket) */
+    private static final int PERSONAL_AUDIO_PORT = 54480;
+
+    /** Websocket guide path */
+    private static final String LIKELY_GUIDE_PATH = LIKELY_PATH + "/guide";
+
     public ScalarWebClient get(String scalarWebUrl, ScalarWebContext context) throws IOException, ParserConfigurationException, SAXException, URISyntaxException {
         Validate.notEmpty(scalarWebUrl, "scalarWebUrl cannot be empty");
         Objects.requireNonNull(context, "context cannot be null");
@@ -67,9 +81,34 @@ public class ScalarWebClientFactory {
         }
     }
     
-    private ScalarWebClient getDefaultClient(URL scalarWebUrl, ScalarWebContext context) throws DOMException, IOException {
+    private ScalarWebClient getDefaultClient(URL scalarWebUrl, ScalarWebContext context) throws DOMException, IOException, URISyntaxException {
         Objects.requireNonNull(scalarWebUrl, "scalarWebUrl cannot be null");
         Objects.requireNonNull(context, "context cannot be null");
+
+        final URL homeAudioUrl = new URL(scalarWebUrl.getProtocol(), scalarWebUrl.getHost(), HOME_AUDIO_PORT, LIKELY_GUIDE_PATH);
+        logger.debug("Testing Default Scalar Web client to see if it's a home audio device (AVR/Soundbar): {}", homeAudioUrl);
+        try (SonyTransport transport = new SonyHttpTransport(homeAudioUrl.toExternalForm(),
+                GsonUtilities.getApiGson())) {
+            final ScalarWebResult homeAudioRes = transport
+                    .execute(new ScalarWebRequest(1, ScalarWebMethod.GETVERSIONS, ScalarWebMethod.V1_0));
+            if (homeAudioRes.getHttpResponse().getHttpCode() == HttpStatus.OK_200) {
+                final URL baseUrl = new URL(scalarWebUrl.getProtocol(), scalarWebUrl.getHost(), HOME_AUDIO_PORT, LIKELY_PATH);
+                return new ScalarWebClient(new ScalarWebDeviceManager(baseUrl, context));
+            }
+        }
+
+        final URL personalAudioUrl = new URL(scalarWebUrl.getProtocol(), scalarWebUrl.getHost(), PERSONAL_AUDIO_PORT, LIKELY_GUIDE_PATH);
+        logger.debug("Testing Default Scalar Web client to see if it's a personal audio device (Wireless speaker): {}", homeAudioUrl);
+        try (SonyTransport transport = new SonyHttpTransport(personalAudioUrl.toExternalForm(),
+        GsonUtilities.getApiGson())) {
+            final ScalarWebResult personalAudioRes = transport
+                    .execute(new ScalarWebRequest(1, ScalarWebMethod.GETVERSIONS, ScalarWebMethod.V1_0));
+            if (personalAudioRes.getHttpResponse().getHttpCode() == HttpStatus.OK_200) {
+                final URL baseUrl = new URL(scalarWebUrl.getProtocol(), scalarWebUrl.getHost(), PERSONAL_AUDIO_PORT, LIKELY_PATH);
+                return new ScalarWebClient(new ScalarWebDeviceManager(baseUrl, context));
+            }
+        }
+
 
         final URL baseUrl = new URL(scalarWebUrl.getProtocol(), scalarWebUrl.getHost(), LIKELY_PORT, LIKELY_PATH);
         return new ScalarWebClient(new ScalarWebDeviceManager(baseUrl, context));

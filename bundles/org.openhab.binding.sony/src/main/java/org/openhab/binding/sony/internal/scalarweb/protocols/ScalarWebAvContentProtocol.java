@@ -1886,6 +1886,11 @@ class ScalarWebAvContentProtocol<T extends ThingCallback<String>> extends Abstra
         stateChanged(PL_TITLE, id, SonyUtil.newStringType(pci.getTitle()));
         stateChanged(PL_TRIPLETSTR, id, SonyUtil.newStringType(pci.getTripletStr()));
 
+        final String source = pci.getSource();
+        // if (source != null && StringUtils.isNotEmpty(source) && ) {
+        //     if (new Source())
+        // }
+
         final String sourceUri = pci.getUri();
         if (sourceUri != null && StringUtils.isNotEmpty(sourceUri)) {
             // statePlaying.put(output, new PlayingState(sourceUri, preset));
