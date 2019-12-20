@@ -50,7 +50,7 @@ import com.thoughtworks.xstream.annotations.XStreamImplicit;
  */
 @NonNullByDefault
 @XStreamAlias("actionList")
-class IrccActionList {
+public class IrccActionList {
 
     /**
      * The list of actions found in the XML (can be null or empty)
@@ -65,6 +65,7 @@ class IrccActionList {
      * @return the url for action or null if not found
      */
     @Nullable
+    public
     String getUrlForAction(String actionName) {
         Validate.notEmpty(actionName, "actionName cannot be empty");
 

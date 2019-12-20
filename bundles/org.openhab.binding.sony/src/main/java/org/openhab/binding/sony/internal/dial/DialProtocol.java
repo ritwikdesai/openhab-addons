@@ -105,7 +105,7 @@ class DialProtocol<T extends ThingCallback<String>> implements AutoCloseable {
         transport = SonyTransportFactory.createHttpTransport(deviceUrlStr);
 
         SonyUtil.sendWakeOnLan(logger, config.getDeviceIpAddress(), config.getDeviceMacAddress());
-        final DialClient dialClient = DialClient.get(transport, this.deviceUrlStr);
+        final DialClient dialClient = new DialClientFactory().get(this.deviceUrlStr);
         if (dialClient == null) {
             throw new IOException("DialState could not be retrieved from " + deviceAddress);
         }

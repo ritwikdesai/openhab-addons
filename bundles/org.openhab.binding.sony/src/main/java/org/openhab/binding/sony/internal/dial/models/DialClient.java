@@ -12,21 +12,16 @@
  */
 package org.openhab.binding.sony.internal.dial.models;
 
-import java.io.IOException;
 import java.net.URL;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 
+import com.thoughtworks.xstream.annotations.XStreamImplicit;
+
 import org.apache.commons.lang.StringUtils;
-import org.apache.commons.lang.Validate;
 import org.eclipse.jdt.annotation.NonNullByDefault;
 import org.eclipse.jdt.annotation.Nullable;
-import org.eclipse.jetty.http.HttpStatus;
-import org.openhab.binding.sony.internal.net.HttpResponse;
-import org.openhab.binding.sony.internal.transports.SonyTransport;
-
-import com.thoughtworks.xstream.annotations.XStreamImplicit;
 
 /**
  * This class represents the state of a DIAL device. The DIAL state will include all the devices specified and the URL
@@ -49,40 +44,12 @@ public class DialClient {
      * @param appUrl a non-null application URL
      * @param infos  a non-null, possibly emply list of {@link DialDeviceInfo}
      */
-    private DialClient(URL appUrl, List<DialDeviceInfo> infos) {
+    public DialClient(URL appUrl, List<DialDeviceInfo> infos) {
         Objects.requireNonNull(appUrl, "appUrl cannot be null");
         Objects.requireNonNull(infos, "infos cannot be null");
 
         this.appUrl = appUrl;
         deviceInfos = Collections.unmodifiableList(infos);
-    }
-
-    /**
-     * Attempts to retrieve the {@link DialClient} from the specified URL. Null will be returned if the URL contained an
-     * invalid representation
-     *
-     * @param transport a non-null transport to use
-     * @param dialUrl a non-null, non-empty URL to find
-     * @return the {@link DialClient} if found, null otherwise
-     * @throws IOException if an IO exception occurs getting the client
-     */
-    public @Nullable static DialClient get(SonyTransport transport, String dialUrl) throws IOException {
-        Objects.requireNonNull(transport, "transport cannot be null");
-        Validate.notEmpty(dialUrl, "dialUrl cannot be empty");
-
-        final HttpResponse resp = transport.executeGet(dialUrl);
-        if (resp.getHttpCode() != HttpStatus.OK_200) {
-            throw resp.createException();
-        }
-
-        final String content = resp.getContent();
-        final DialRoot root = DialXmlReader.ROOT.fromXML(content);
-        if (root == null) {
-            return null;
-        }
-
-        final String appUrl = resp.getResponseHeader("Application-URL");
-        return new DialClient(new URL(appUrl), root.getDevices());
     }
 
     /**
@@ -113,6 +80,10 @@ public class DialClient {
                 .orElse(null);
     }
 
+    /**
+     * Returns the list of device information.  Likely only a single device
+     * @return a non-null, possibly empty non-modifiable list of {@link DialDeviceInfo}
+     */
     public List<DialDeviceInfo> getDeviceInfos() {
         return deviceInfos;
     }

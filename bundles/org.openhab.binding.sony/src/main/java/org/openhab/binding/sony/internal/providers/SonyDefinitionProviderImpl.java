@@ -69,8 +69,8 @@ import org.slf4j.LoggerFactory;
  * @author Tim Roberts - Initial contribution
  */
 @Component(immediate = true, service = { DynamicStateDescriptionProvider.class, SonyDynamicStateProvider.class,
-        SonyDefinitionProvider.class, ThingTypeProvider.class, ChannelGroupTypeProvider.class },
-        properties="OSGI-INF/SonyDefinitionProviderImpl.properties")
+        SonyDefinitionProvider.class, ThingTypeProvider.class,
+        ChannelGroupTypeProvider.class }, properties = "OSGI-INF/SonyDefinitionProviderImpl.properties")
 @NonNullByDefault
 public class SonyDefinitionProviderImpl
         implements SonyDefinitionProvider, ThingTypeProvider, SonyDynamicStateProvider, ChannelGroupTypeProvider {
@@ -90,8 +90,7 @@ public class SonyDefinitionProviderImpl
     private @NonNullByDefault({}) ThingTypeRegistry thingTypeRegistry;
 
     /** Scheduler used to schedule events */
-    private final ScheduledExecutorService scheduler = ThreadPoolManager
-            .getScheduledPool("SonyDefinitionProviderImpl");
+    private final ScheduledExecutorService scheduler = ThreadPoolManager.getScheduledPool("SonyDefinitionProviderImpl");
 
     @Override
     public @Nullable ChannelGroupType getChannelGroupType(ChannelGroupTypeUID channelGroupTypeUID,
@@ -183,10 +182,10 @@ public class SonyDefinitionProviderImpl
      * and channel ID. This will intelligenly merge the original state description
      * (from a thing definition) with any overrides that have been added
      *
-     * @param thingUID                 a non-null thing uid
-     * @param channelId                a non-null, non-empty channel id
+     * @param thingUID a non-null thing uid
+     * @param channelId a non-null, non-empty channel id
      * @param originalStateDescription a potentially null (if none) original state
-     *                                 description
+     *            description
      * @return
      */
     private @Nullable StateDescription getStateDescription(ThingUID thingUID, String channelId,
@@ -317,7 +316,8 @@ public class SonyDefinitionProviderImpl
             return ctuid == null ? null
                     : new SonyThingChannelDefinition(chl.getUID().getId(), null, ctuid.getId(),
                             new SonyThingStateDefinition(getStateDescription(chl, null, null)), chl.getProperties());
-        }).filter(chl -> chl != null).collect(Collectors.toList());
+        }).filter(chl -> chl != null).sorted((f, l) -> f.getChannelId().compareToIgnoreCase(l.getChannelId()))
+                .collect(Collectors.toList());
 
         final String label = thing.getLabel() == null || StringUtils.isEmpty(thing.getLabel()) ? thingType.getLabel()
                 : thing.getLabel();
@@ -371,7 +371,7 @@ public class SonyDefinitionProviderImpl
 
     @Override
     public void addListener(String modelName, ThingTypeUID currentThingTypeUID, SonyProviderListener listener) {
-        sources.forEach(s->s.addListener(modelName, currentThingTypeUID, listener));
+        sources.forEach(s -> s.addListener(modelName, currentThingTypeUID, listener));
     }
 
     @Override

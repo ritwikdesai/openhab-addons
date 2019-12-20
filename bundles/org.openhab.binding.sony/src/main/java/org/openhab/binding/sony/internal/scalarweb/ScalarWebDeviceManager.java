@@ -54,6 +54,8 @@ import com.google.gson.Gson;
  */
 @NonNullByDefault
 public class ScalarWebDeviceManager implements AutoCloseable {
+    /** The Constant for the sony upnp identifier */
+    public static final String SONY_AV_NS = "urn:schemas-sony-com:av";
 
     /** The logger */
     private Logger logger = LoggerFactory.getLogger(ScalarWebDeviceManager.class);
@@ -72,8 +74,8 @@ public class ScalarWebDeviceManager implements AutoCloseable {
      *
      * @param baseUrl a non-null base url
      * @param context a non-null context to use
-     * @throws IOException           if an IOException occurs contacting the device
-     * @throws DOMException          if a DOMException occurs processing the XML from the device
+     * @throws IOException if an IOException occurs contacting the device
+     * @throws DOMException if a DOMException occurs processing the XML from the device
      * @throws MalformedURLException if there is a malformed URL (in the device XML)
      */
     public ScalarWebDeviceManager(URL baseUrl, ScalarWebContext context)
@@ -84,12 +86,12 @@ public class ScalarWebDeviceManager implements AutoCloseable {
     /**
      * Private contructor to create a device manager from the parameters
      *
-     * @param baseUrl          a non-null base URL
-     * @param version          a non-null, non-empty API version
+     * @param baseUrl a non-null base URL
+     * @param version a non-null, non-empty API version
      * @param serviceProtocols a non-null, possibly empty list of protocols
-     * @param context          a non-null context
-     * @throws IOException           if an IOException occurs contacting the device
-     * @throws DOMException          if a DOMException occurs processing the XML from the device
+     * @param context a non-null context
+     * @throws IOException if an IOException occurs contacting the device
+     * @throws DOMException if a DOMException occurs processing the XML from the device
      * @throws MalformedURLException if there is a malformed URL (in the device XML)
      */
     private ScalarWebDeviceManager(URL baseUrl, String version, Set<ServiceProtocol> serviceProtocols,
@@ -107,8 +109,8 @@ public class ScalarWebDeviceManager implements AutoCloseable {
         final SonyTransportFactory transportFactory = new SonyTransportFactory(baseUrl, gson,
                 context.getWebSocketClient(), context.getScheduler());
 
-        try (final SonyTransport httpTransport = transportFactory
-                .getSonyTransport(ScalarWebService.GUIDE, SonyTransport.HTTP)) {
+        try (final SonyTransport httpTransport = transportFactory.getSonyTransport(ScalarWebService.GUIDE,
+                SonyTransport.HTTP)) {
             if (httpTransport == null) {
                 throw new IllegalArgumentException("Shouldn't happen - HTTP transport not found!");
             }
@@ -123,11 +125,11 @@ public class ScalarWebDeviceManager implements AutoCloseable {
 
             // Manually create the guide to get service protocols and supported methods
             // Must use alternative supported api since we can't use ourselves to get the supported api
-            final SupportedApi accessApi = SupportedApi.getSupportApiAlternate(ScalarWebService.ACCESSCONTROL, httpTransport,
-                    logger);
+            final SupportedApi accessApi = SupportedApi.getSupportApiAlternate(ScalarWebService.ACCESSCONTROL,
+                    httpTransport, logger);
             final ScalarWebService access = new ScalarWebService(transportFactory,
-                    new ServiceProtocol(ScalarWebService.ACCESSCONTROL, Collections.singleton(SonyTransport.HTTP)), version,
-                    accessApi);
+                    new ServiceProtocol(ScalarWebService.ACCESSCONTROL, Collections.singleton(SonyTransport.HTTP)),
+                    version, accessApi);
 
             final ServiceProtocols sps = guide.execute(ScalarWebMethod.GETSERVICEPROTOCOLS).as(ServiceProtocols.class);
             for (ServiceProtocol serviceProtocol : sps.getServiceProtocols()) {
@@ -161,10 +163,10 @@ public class ScalarWebDeviceManager implements AutoCloseable {
      * Creates a scalar web device manager from the provided information
      *
      * @param deviceInfo a non-null device info node describing the device
-     * @param context    a non-null context to use
+     * @param context a non-null context to use
      * @return a non-null scalar web device manager
-     * @throws IOException           if an IOException occurs contacting the device
-     * @throws DOMException          if a DOMException occurs processing the XML from the device
+     * @throws IOException if an IOException occurs contacting the device
+     * @throws DOMException if a DOMException occurs processing the XML from the device
      * @throws MalformedURLException if there is a malformed URL (in the device XML)
      */
     public static ScalarWebDeviceManager create(Node deviceInfo, ScalarWebContext context)
@@ -187,8 +189,7 @@ public class ScalarWebDeviceManager implements AutoCloseable {
             } else if ("X_ScalarWebAPI_BaseURL".equalsIgnoreCase(nodeName)) {
                 baseUrl = new URL(node.getTextContent());
             } else if ("X_ScalarWebAPI_ServiceList".equalsIgnoreCase(nodeName)) {
-                final NodeList sts = ((Element) node).getElementsByTagNameNS(ScalarWebClient.SONY_AV_NS,
-                        "X_ScalarWebAPI_ServiceType");
+                final NodeList sts = ((Element) node).getElementsByTagNameNS(SONY_AV_NS, "X_ScalarWebAPI_ServiceType");
 
                 for (int j = sts.getLength() - 1; j >= 0; j--) {
                     // assume auto transport since we don't know

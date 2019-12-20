@@ -69,7 +69,7 @@ public class IrccRemoteCommands {
     /**
      * Constructs the remote commands using the {@link #getDefaultCommands()}
      */
-    IrccRemoteCommands() {
+    public IrccRemoteCommands() {
         this(null);
     }
 
@@ -240,7 +240,7 @@ public class IrccRemoteCommands {
      * @param codeList a possibly null {@link IrccCodeList}
      * @return a non-null {@link IrccRemoteCommands}
      */
-    IrccRemoteCommands withCodeList(@Nullable IrccCodeList codeList) {
+    public IrccRemoteCommands withCodeList(@Nullable IrccCodeList codeList) {
         if (codeList == null) {
             return this;
         }

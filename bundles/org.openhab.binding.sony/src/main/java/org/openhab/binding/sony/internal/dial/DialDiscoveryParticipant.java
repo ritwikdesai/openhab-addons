@@ -13,7 +13,6 @@
 package org.openhab.binding.sony.internal.dial;
 
 import java.io.IOException;
-import java.net.URISyntaxException;
 import java.net.URL;
 import java.util.Objects;
 
@@ -36,8 +35,6 @@ import org.openhab.binding.sony.internal.UidUtils;
 import org.openhab.binding.sony.internal.dial.models.DialClient;
 import org.openhab.binding.sony.internal.net.NetUtil;
 import org.openhab.binding.sony.internal.providers.SonyDefinitionProvider;
-import org.openhab.binding.sony.internal.transports.SonyTransport;
-import org.openhab.binding.sony.internal.transports.SonyTransportFactory;
 import org.osgi.service.component.annotations.Component;
 import org.osgi.service.component.annotations.Reference;
 
@@ -70,15 +67,15 @@ public class DialDiscoveryParticipant extends AbstractDiscoveryParticipant imple
         final URL dialURL = identity.getDescriptorURL();
 
         String deviceId;
-        try (SonyTransport transport = SonyTransportFactory.createHttpTransport(dialURL.toString())) {
-            final DialClient dialClient = DialClient.get(transport, dialURL.toString());
+        try {
+            final DialClient dialClient = new DialClientFactory().get(dialURL.toString());
             if (dialClient == null || !dialClient.hasDialService()) {
-                logger.debug("DIAL device didn't implement any device infos - ignoring: {}", identity);
+                logger.debug("DIAL device couldn't be created or didn't implement any device information - ignoring: {}", identity);
                 return null;
             }
 
             deviceId = dialClient.getFirstDeviceId();
-        } catch (IOException | URISyntaxException e) {
+        } catch (IOException e) {
             logger.debug("DIAL device exception {}: {}", device.getIdentity(), e.getMessage(), e);
             return null;
         }

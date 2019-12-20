@@ -52,6 +52,7 @@ import org.openhab.binding.sony.internal.providers.SonyProviderListener;
 import org.openhab.binding.sony.internal.providers.SonyDynamicStateProvider;
 import org.openhab.binding.sony.internal.providers.models.SonyDeviceCapability;
 import org.openhab.binding.sony.internal.providers.models.SonyServiceCapability;
+import org.openhab.binding.sony.internal.scalarweb.models.ScalarWebMethod;
 import org.openhab.binding.sony.internal.scalarweb.models.ScalarWebService;
 import org.openhab.binding.sony.internal.scalarweb.protocols.ScalarWebLoginProtocol;
 import org.openhab.binding.sony.internal.scalarweb.protocols.ScalarWebProtocol;
@@ -217,7 +218,7 @@ public class ScalarWebHandler extends AbstractThingHandler<ScalarWebConfig> {
             final ScalarWebContext context = new ScalarWebContext(() -> getThing(), config, tracker, scheduler,
                     sonyDynamicStateProvider, webSocketClient, transformationService, mapper);
 
-            final ScalarWebClient client = new ScalarWebClient(scalarWebUrl, context);
+            final ScalarWebClient client = new ScalarWebClientFactory().get(scalarWebUrl, context);
             scalarClient.set(client);
 
             final ScalarWebLoginProtocol<ThingCallback<String>> loginHandler = new ScalarWebLoginProtocol<>(client,
@@ -345,7 +346,9 @@ public class ScalarWebHandler extends AbstractThingHandler<ScalarWebConfig> {
 
             final List<SonyServiceCapability> srvCapabilities = client.getDevice().getServices().stream()
                     .map(srv -> new SonyServiceCapability(srv.getServiceName(), srv.getVersion(),
-                            srv.getTransport().getProtocolType(), srv.getMethods(), srv.getNotifications()))
+                            srv.getTransport().getProtocolType(),
+                            srv.getMethods().stream().sorted(ScalarWebMethod.COMPARATOR).collect(Collectors.toList()),
+                            srv.getNotifications().stream().sorted(ScalarWebMethod.COMPARATOR).collect(Collectors.toList())))
                     .collect(Collectors.toList());
 
             sonyDefinitionProvider

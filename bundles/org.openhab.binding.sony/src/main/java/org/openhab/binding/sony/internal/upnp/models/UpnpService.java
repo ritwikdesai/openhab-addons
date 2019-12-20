@@ -16,6 +16,7 @@ import java.net.URL;
 import java.util.Objects;
 
 import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang.Validate;
 import org.eclipse.jdt.annotation.NonNullByDefault;
 import org.eclipse.jdt.annotation.Nullable;
 import org.openhab.binding.sony.internal.net.NetUtil;
@@ -54,6 +55,25 @@ public class UpnpService {
     /** The control url */
     @XStreamAlias("controlURL")
     private @Nullable String controlUrl;
+
+    /**
+     * Constructs a UpnpService 
+     * @param serviceId a non-null service ID
+     * @param serviceType a non-null service type
+     * @param scpdUrl a non-null scpd URL
+     * @param controlUrl a non-null control URL
+     */
+    public UpnpService(String serviceId, String serviceType, String scpdUrl, String controlUrl) {
+        Validate.notEmpty(serviceId, "serviceId cannot be empty");
+        Validate.notEmpty(serviceType, "serviceType cannot be empty");
+        Validate.notEmpty(scpdUrl, "scpdUrl cannot be empty");
+        Validate.notEmpty(controlUrl, "controlUrl cannot be empty");
+
+        this.serviceId = serviceId;
+        this.serviceType = serviceType;
+        this.scpdUrl = scpdUrl;
+        this.controlUrl = controlUrl;
+    }
 
     /**
      * Gets the SCPD URL given the base URL

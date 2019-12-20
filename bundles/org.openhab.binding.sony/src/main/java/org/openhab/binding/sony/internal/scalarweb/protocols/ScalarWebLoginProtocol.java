@@ -42,6 +42,7 @@ import org.openhab.binding.sony.internal.SonyAuth;
 import org.openhab.binding.sony.internal.SonyAuthChecker;
 import org.openhab.binding.sony.internal.SonyUtil;
 import org.openhab.binding.sony.internal.ThingCallback;
+import org.openhab.binding.sony.internal.ircc.IrccClientFactory;
 import org.openhab.binding.sony.internal.ircc.models.IrccClient;
 import org.openhab.binding.sony.internal.ircc.models.IrccRemoteCommand;
 import org.openhab.binding.sony.internal.ircc.models.IrccRemoteCommands;
@@ -120,7 +121,7 @@ public class ScalarWebLoginProtocol<T extends ThingCallback<String>> {
             final String irccUrl = config.getIrccUrl();
             try {
                 SonyUtil.sendWakeOnLan(logger, config.getDeviceIpAddress(), config.getDeviceMacAddress());
-                return irccUrl == null || StringUtils.isEmpty(irccUrl) ? null : new IrccClient(irccUrl);
+                return irccUrl == null || StringUtils.isEmpty(irccUrl) ? null : new IrccClientFactory().get(irccUrl);
             } catch (IOException | URISyntaxException e) {
                 logger.debug("Cannot create IRCC Client: {}", e.getMessage());
                 return null;
@@ -347,7 +348,7 @@ public class ScalarWebLoginProtocol<T extends ThingCallback<String>> {
                 final String irccUrl = config.getIrccUrl();
                 if (irccUrl != null && StringUtils.isNotEmpty(irccUrl)) {
                     try {
-                        final IrccClient irccClient = new IrccClient(irccUrl);
+                        final IrccClient irccClient = new IrccClientFactory().get(irccUrl);
                         final IrccRemoteCommands remoteCmds = irccClient.getRemoteCommands();
                         for (IrccRemoteCommand v : remoteCmds.getRemoteCommands().values()) {
                             // Note: encode value in case it's a URL type

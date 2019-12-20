@@ -39,6 +39,7 @@ import org.eclipse.smarthome.core.transform.TransformationService;
 import org.eclipse.smarthome.core.types.Command;
 import org.openhab.binding.sony.internal.SonyUtil;
 import org.openhab.binding.sony.internal.ThingCallback;
+import org.openhab.binding.sony.internal.ircc.IrccClientFactory;
 import org.openhab.binding.sony.internal.ircc.models.IrccClient;
 import org.openhab.binding.sony.internal.net.HttpResponse;
 import org.openhab.binding.sony.internal.net.HttpResponse.SOAPError;
@@ -546,7 +547,7 @@ class ScalarWebSystemProtocol<T extends ThingCallback<String>> extends AbstractS
             logger.debug("IRCC URL was not specified in configuration");
         } else {
             try {
-                final IrccClient irccClient = new IrccClient(localIrccUrl);
+                final IrccClient irccClient = new IrccClientFactory().get(localIrccUrl);
                 final ScalarWebContext context = getContext();
                 String localCmd = cmd;
 

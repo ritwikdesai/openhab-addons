@@ -36,6 +36,7 @@ import com.thoughtworks.xstream.annotations.XStreamImplicit;
  * @author Tim Roberts - Initial contribution
  */
 @NonNullByDefault
+public
 class IrccCodeList {
 
     /**

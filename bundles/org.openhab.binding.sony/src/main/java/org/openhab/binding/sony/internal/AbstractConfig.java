@@ -84,7 +84,9 @@ public class AbstractConfig {
      */
     public @Nullable Integer getDevicePort() {
         try {
-            return getDeviceUrl().getPort();
+            final URL deviceUrl = getDeviceUrl();
+            final int port = deviceUrl.getPort();
+            return port == -1 ? deviceUrl.getDefaultPort() : port;
         } catch (MalformedURLException e) {
             return null;
         }

@@ -158,6 +158,7 @@ import com.thoughtworks.xstream.annotations.XStreamAlias;
  */
 @NonNullByDefault
 @XStreamAlias("root")
+public
 class IrccRoot {
     /** The IRCC device that is part of the root */
     @XStreamAlias("device")

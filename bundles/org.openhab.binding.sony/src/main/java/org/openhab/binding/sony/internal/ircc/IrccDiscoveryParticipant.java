@@ -70,7 +70,7 @@ public class IrccDiscoveryParticipant extends AbstractDiscoveryParticipant imple
         String sysWolAddress = null;
 
         try {
-            final IrccClient irccClient = new IrccClient(irccURL.toString());
+            final IrccClient irccClient = new IrccClientFactory().get(irccURL);
             final IrccSystemInformation systemInformation = irccClient.getSystemInformation();
             sysWolAddress = systemInformation.getWolMacAddress();
         } catch (IOException | URISyntaxException e) {

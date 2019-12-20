@@ -32,23 +32,23 @@ import com.thoughtworks.xstream.io.xml.StaxDriver;
  * @param <T> the generic type to cast the XML to
  */
 @NonNullByDefault
-class IrccXmlReader<T> {
+public class IrccXmlReader<T> {
 
     /** The XStream instance */
     private final XStream xstream = new XStream(new StaxDriver());
 
-    static final IrccXmlReader<IrccRoot> ROOT = new IrccXmlReader<>(new Class[] { IrccRoot.class, IrccDevice.class,
+    public static final IrccXmlReader<IrccRoot> ROOT = new IrccXmlReader<>(new Class[] { IrccRoot.class, IrccDevice.class,
             IrccUnrDeviceInfo.class, IrccCodeList.class, IrccCode.class, UpnpServiceList.class, UpnpService.class },
             new IrccCode.IrccCodeConverter());
 
-    static final IrccXmlReader<IrccActionList> ACTIONS = new IrccXmlReader<>(
+    public static final IrccXmlReader<IrccActionList> ACTIONS = new IrccXmlReader<>(
             new Class[] { IrccActionList.class, IrccActionList.IrccAction.class });
 
-    static final IrccXmlReader<IrccSystemInformation> SYSINFO = new IrccXmlReader<>(
+    public static final IrccXmlReader<IrccSystemInformation> SYSINFO = new IrccXmlReader<>(
             new Class[] { IrccSystemInformation.class, IrccSystemInformation.SupportedFunction.class,
                     IrccSystemInformation.Function.class, IrccSystemInformation.FunctionItem.class });
 
-    static final IrccXmlReader<IrccRemoteCommands> REMOTECOMMANDS = new IrccXmlReader<>(
+    public static final IrccXmlReader<IrccRemoteCommands> REMOTECOMMANDS = new IrccXmlReader<>(
             new Class[] { IrccRemoteCommands.class, IrccRemoteCommand.class, },
             new IrccRemoteCommand.IrccRemoteCommandConverter(), new IrccRemoteCommands.IrccRemoteCommandsConverter());
 
@@ -88,6 +88,7 @@ class IrccXmlReader<T> {
      */
     @SuppressWarnings("unchecked")
     @Nullable
+    public
     T fromXML(String xml) {
         if (StringUtils.isNotEmpty(xml)) {
             return (T) this.xstream.fromXML(xml);

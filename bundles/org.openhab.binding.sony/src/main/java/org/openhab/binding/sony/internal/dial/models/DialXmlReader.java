@@ -33,7 +33,7 @@ public class DialXmlReader<T> {
     private final XStream xstream = new XStream(new StaxDriver());
 
     /** The reader for the ROOT XML (see {@link DialRoot}) */
-    static final DialXmlReader<DialRoot> ROOT = new DialXmlReader<>(
+    public static final DialXmlReader<DialRoot> ROOT = new DialXmlReader<>(
             new Class[] { DialRoot.class, DialRoot.RootDevice.class, DialClient.class, DialDeviceInfo.class });
 
     /** The reader for the SERVICE XML (see {@link DialService}) */
@@ -61,8 +61,7 @@ public class DialXmlReader<T> {
      * @return the possibly null translation
      */
     @SuppressWarnings("unchecked")
-    @Nullable
-    public T fromXML(String xml) {
+    public @Nullable T fromXML(String xml) {
         if (StringUtils.isNotEmpty(xml)) {
             return (T) this.xstream.fromXML(xml);
         }

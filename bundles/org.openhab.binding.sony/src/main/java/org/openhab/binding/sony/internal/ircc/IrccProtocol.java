@@ -139,7 +139,7 @@ class IrccProtocol<T extends ThingCallback<String>> implements AutoCloseable {
 
         SonyUtil.sendWakeOnLan(logger, config.getDeviceIpAddress(), config.getDeviceMacAddress());
 
-        this.irccClient = new IrccClient(config.getDeviceUrl().toExternalForm());
+        this.irccClient = new IrccClientFactory().get(config.getDeviceUrl());
         this.transport = SonyTransportFactory.createHttpTransport(irccClient.getBaseUrl().toExternalForm());
         this.sonyAuth = new SonyAuth(() -> irccClient);
     }

@@ -101,98 +101,98 @@ import com.thoughtworks.xstream.annotations.XStreamImplicit;
 @NonNullByDefault
 @XStreamAlias("scpd")
 public class UpnpScpd {
-    @XStreamAlias("serviceStateTable")
-    private @Nullable UpnpScpdStateTable stateTable;
+  @XStreamAlias("serviceStateTable")
+  private @Nullable UpnpScpdStateTable stateTable;
 
-    @XStreamAlias("actionList")
-    private @Nullable UpnpScpdActionList actionList;
+  @XStreamAlias("actionList")
+  private @Nullable UpnpScpdActionList actionList;
 
-    /**
-     * Gets the action for the given action name
-     *
-     * @param actionName a non-null, non-empty action name
-     * @return a possibly null action (null if not found)
-     */
-    public @Nullable UpnpScpdAction getAction(String actionName) {
-        final UpnpScpdActionList localActionList = actionList;
-        final List<UpnpScpdAction> actions = localActionList == null ? null : localActionList.actions;
-        if (actions != null) {
-            for (UpnpScpdAction action : actions) {
-                if (StringUtils.equalsIgnoreCase(actionName, action.getActionName())) {
-                    return action;
-                }
-            }
+  /**
+   * Gets the action for the given action name
+   *
+   * @param actionName a non-null, non-empty action name
+   * @return a possibly null action (null if not found)
+   */
+  public @Nullable UpnpScpdAction getAction(String actionName) {
+    final UpnpScpdActionList localActionList = actionList;
+    final List<UpnpScpdAction> actions = localActionList == null ? null : localActionList.actions;
+    if (actions != null) {
+      for (UpnpScpdAction action : actions) {
+        if (StringUtils.equalsIgnoreCase(actionName, action.getActionName())) {
+          return action;
         }
-        return null;
+      }
     }
+    return null;
+  }
 
-    /**
-     * Gets the SOAP request for the specified serviceType, action name and parameters
-     *
-     * @param serviceType a non-null, non-empty service type
-     * @param actionName a non-null, non-empty action name
-     * @param parms the optional parameters
-     * @return a string representing the SOAP action or null if serviceType/actionName was not found
-     */
-    public @Nullable String getSoap(String serviceType, String actionName, String... parms) {
-        Validate.notEmpty(serviceType, "serviceType cannnot be empty");
-        Validate.notEmpty(actionName, "actionName cannnot be empty");
+  /**
+   * Gets the SOAP request for the specified serviceType, action name and parameters
+   *
+   * @param serviceType a non-null, non-empty service type
+   * @param actionName a non-null, non-empty action name
+   * @param parms the optional parameters
+   * @return a string representing the SOAP action or null if serviceType/actionName was not found
+   */
+  public @Nullable String getSoap(String serviceType, String actionName, String... parms) {
+    Validate.notEmpty(serviceType, "serviceType cannnot be empty");
+    Validate.notEmpty(actionName, "actionName cannnot be empty");
 
-        final UpnpScpdActionList localActionList = actionList;
-        final List<UpnpScpdAction> actions = localActionList == null ? null : localActionList.actions;
-        if (actions != null) {
-            for (UpnpScpdAction action : actions) {
-                if (StringUtils.equalsIgnoreCase(actionName, action.getActionName())) {
-                    final StringBuilder sb = new StringBuilder(
-                            "<?xml version=\"1.0\"?>\n<s:Envelope xmlns:s=\"http://schemas.xmlsoap.org/soap/envelope/\" s:encodingStyle=\"http://schemas.xmlsoap.org/soap/encoding/\">\n  <s:Body>\n    <u:");
-                    sb.append(actionName);
-                    sb.append(" xmlns:u=\"");
-                    sb.append(serviceType);
-                    sb.append("\">");
+    final UpnpScpdActionList localActionList = actionList;
+    final List<UpnpScpdAction> actions = localActionList == null ? null : localActionList.actions;
+    if (actions != null) {
+      for (UpnpScpdAction action : actions) {
+        if (StringUtils.equalsIgnoreCase(actionName, action.getActionName())) {
+          final StringBuilder sb = new StringBuilder(
+              "<?xml version=\"1.0\"?>\n<s:Envelope xmlns:s=\"http://schemas.xmlsoap.org/soap/envelope/\" s:encodingStyle=\"http://schemas.xmlsoap.org/soap/encoding/\">\n  <s:Body>\n    <u:");
+          sb.append(actionName);
+          sb.append(" xmlns:u=\"");
+          sb.append(serviceType);
+          sb.append("\">");
 
-                    int parmIdx = 0;
-                    for (UpnpScpdArgument arg : action.getArguments()) {
-                        if (arg.isIn()) {
-                            final String parm = parmIdx >= parms.length ? "" : parms[parmIdx++];
-                            sb.append("\n<");
-                            sb.append(arg.getArgName());
-                            sb.append(">");
-                            sb.append(parm);
-                            sb.append("</");
-                            sb.append(arg.getArgName());
-                            sb.append(">");
-                        }
-                    }
-
-                    sb.append("\n    </u:");
-                    sb.append(actionName);
-                    sb.append(">\n  </s:Body>\n</s:Envelope>\n");
-                    return sb.toString();
-                }
+          int parmIdx = 0;
+          for (UpnpScpdArgument arg : action.getArguments()) {
+            if (arg.isIn()) {
+              final String parm = parmIdx >= parms.length ? "" : parms[parmIdx++];
+              sb.append("\n<");
+              sb.append(arg.getArgName());
+              sb.append(">");
+              sb.append(parm);
+              sb.append("</");
+              sb.append(arg.getArgName());
+              sb.append(">");
             }
+          }
+
+          sb.append("\n    </u:");
+          sb.append(actionName);
+          sb.append(">\n  </s:Body>\n</s:Envelope>\n");
+          return sb.toString();
         }
-        return null;
+      }
     }
+    return null;
+  }
 
-    /**
-     * The action list class that holds the list of actions
-     *
-     * @author Tim Roberts - Initial Contribution
-     *
-     */
-    class UpnpScpdActionList {
-        @XStreamImplicit
-        private @Nullable List<UpnpScpdAction> actions;
-    }
+  /**
+   * The action list class that holds the list of actions
+   *
+   * @author Tim Roberts - Initial Contribution
+   *
+   */
+  class UpnpScpdActionList {
+    @XStreamImplicit
+    private @Nullable List<UpnpScpdAction> actions;
+  }
 
-    /**
-     * The state table that holds a list of state variables
-     *
-     * @author Tim Roberts - Initial Contribution
-     *
-     */
-    public class UpnpScpdStateTable {
-        @XStreamImplicit
-        private @Nullable List<UpnpScpdStateVariable> variables;
-    }
+  /**
+   * The state table that holds a list of state variables
+   *
+   * @author Tim Roberts - Initial Contribution
+   *
+   */
+  public class UpnpScpdStateTable {
+    @XStreamImplicit
+    private @Nullable List<UpnpScpdStateVariable> variables;
+  }
 }

@@ -201,7 +201,7 @@ class ScalarWebAppControlProtocol<T extends ThingCallback<String>> extends Abstr
                 for (ScalarWebChannel chnl : appChannels) {
                     if (StringUtils.equalsIgnoreCase(uri, chnl.getPathPart(0))) {
                         final String cid = chnl.getChannelId();
-                        callback.stateChanged(cid, SonyUtil.newStringType(app.getTitle()));
+                        
                         switch (chnl.getCategory()) {
                             case APPTITLE:
                                 callback.stateChanged(cid, SonyUtil.newStringType(app.getTitle()));

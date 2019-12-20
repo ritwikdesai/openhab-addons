@@ -55,7 +55,7 @@ public class DialDeviceInfo {
      * @param deviceId    the possibly null, possibly empty application device ID
      * @param deviceType  the possibly null, possibly empty application device type
      */
-    private DialDeviceInfo(@Nullable String appsListUrl, @Nullable String deviceId, @Nullable String deviceType) {
+    public DialDeviceInfo(@Nullable String appsListUrl, @Nullable String deviceId, @Nullable String deviceType) {
         this.appsListUrl = appsListUrl;
         this.deviceId = deviceId;
         this.deviceType = deviceType;

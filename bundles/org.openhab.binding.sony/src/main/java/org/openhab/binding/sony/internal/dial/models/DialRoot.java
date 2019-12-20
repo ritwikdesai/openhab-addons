@@ -71,7 +71,7 @@ import com.thoughtworks.xstream.annotations.XStreamImplicit;
  */
 @NonNullByDefault
 @XStreamAlias("root")
-class DialRoot {
+public class DialRoot {
 
     /** The deserialized {@link DialClient} */
     @XStreamAlias("device")
